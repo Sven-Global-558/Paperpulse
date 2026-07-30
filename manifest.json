@@ -1,0 +1,15 @@
+{
+  "name": "De Kaartenkast",
+  "short_name": "Kaartenkast",
+  "description": "Digitaliseer visitekaartjes, gesorteerd op land en klanttype",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#D8C8A0",
+  "theme_color": "#3F5D46",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
