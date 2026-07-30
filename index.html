@@ -144,10 +144,14 @@
       </div>
 
       <div id="scanEmpty" class="empty-state">
-        <p>Maak een foto van een visitekaartje. Claude AI leest de gegevens automatisch uit en vult alle vakjes voor je in!</p>
+        <p>Maak een foto van een visitekaartje of kies een bestand. Claude AI leest de gegevens automatisch uit!</p>
+        
+        <!-- Onzichtbaar bestand-invoerveld dat universeel werkt op mobiel & desktop -->
+        <input type="file" id="hiddenFileInput" accept="image/*" style="display:none;">
+        
         <button class="camera-btn" id="openCamera">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
-          Maak foto
+          Maak foto / kies bestand
         </button>
       </div>
 
@@ -238,14 +242,14 @@
   const TYPE_LABELS = {handelaar:'Handelaar', eindgebruiker:'Eindgebruiker', machineleverancier:'Machineleverancier'};
   const $ = id => document.getElementById(id);
 
-  // ---------- API Key opslaan ----------
+  // ---------- API Sleutel opslaan ----------
   const apiKeyInput = $('apiKeyInput');
   apiKeyInput.value = localStorage.getItem('claude_api_key') || '';
   apiKeyInput.addEventListener('input', () => {
     localStorage.setItem('claude_api_key', apiKeyInput.value.trim());
   });
 
-  // ---------- IndexedDB laag (echte, blijvende opslag) ----------
+  // ---------- IndexedDB laag ----------
   const DB_NAME = 'kaartenkast-db', DB_VERSION = 1;
   let dbPromise = null;
   function openDB(){
@@ -407,4 +411,376 @@
       const data = await response.json();
       if (data.error) throw new Error(data.error.message);
 
-      const responseText = data.content[0].text.replace(/```json|
+      const responseText = data.content[0].text.replace(/```json|```/g, '').trim();
+      const cardData = JSON.parse(responseText);
+
+      $('fBedrijf').value = cardData.bedrijf || '';
+      $('fNaam').value = cardData.naam || '';
+      $('fLand').value = cardData.land || '';
+      $('fTel').value = cardData.telefoon || '';
+      $('fEmail').value = cardData.email || '';
+
+      $('ocrStatus').textContent = '✅ Gegevens succesvol uitgelezen!';
+      $('ocrStatus').className = 'ocr-status ok';
+    } catch(e) {
+      console.error('Claude API Fout:', e);
+      $('ocrStatus').textContent = 'Fout bij uitlezen: ' + (e && e.message ? e.message : String(e));
+      $('ocrStatus').className = 'ocr-status err';
+      $('retryOcr').style.display = 'inline-block';
+    }
+    updateSaveEnabled();
+  }
+
+  $('retryOcr').addEventListener('click', () => {
+    const apiKey = localStorage.getItem('claude_api_key');
+    if(pendingImageDataUrl && apiKey) runClaudeAI(pendingImageDataUrl, apiKey, 'image/jpeg');
+  });
+
+  function resizeToDataUrl(file, maxWidth, quality){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width, h = img.height;
+          if(w > maxWidth){ h = Math.round(h * maxWidth / w); w = maxWidth; }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+  async function compressForStorage(file){
+    let width = 1100, quality = 0.7;
+    let dataUrl = await resizeToDataUrl(file, width, quality);
+    let attempts = 0;
+    while(dataUrl.length > 1800000 && attempts < 4){
+      width = Math.round(width * 0.8);
+      quality = Math.max(0.35, quality - 0.15);
+      dataUrl = await resizeToDataUrl(file, width, quality);
+      attempts++;
+    }
+    return dataUrl;
+  }
+
+  // Bind de knop aan de verborgen file-input
+  const hiddenInput = $('hiddenFileInput');
+  hiddenInput.addEventListener('change', onPhoto);
+  
+  $('openCamera').addEventListener('click', ()=>{
+    hiddenInput.click();
+  });
+
+  function setType(t){
+    pendingType = t;
+    $('btnHandelaar').className = 'type-btn' + (t==='handelaar' ? ' sel-handelaar' : '');
+    $('btnEindgebruiker').className = 'type-btn' + (t==='eindgebruiker' ? ' sel-eindgebruiker' : '');
+    $('btnMachineleverancier').className = 'type-btn' + (t==='machineleverancier' ? ' sel-machineleverancier' : '');
+    updateSaveEnabled();
+  }
+  $('btnHandelaar').addEventListener('click', ()=> setType(pendingType==='handelaar' ? null : 'handelaar'));
+  $('btnEindgebruiker').addEventListener('click', ()=> setType(pendingType==='eindgebruiker' ? null : 'eindgebruiker'));
+  $('btnMachineleverancier').addEventListener('click', ()=> setType(pendingType==='machineleverancier' ? null : 'machineleverancier'));
+
+  function updateSaveEnabled(){
+    $('saveBtn').disabled = !($('fLand').value.trim() && pendingType);
+  }
+  $('fLand').addEventListener('input', updateSaveEnabled);
+
+  $('cancelScan').addEventListener('click', resetScanForm);
+  function resetScanForm(){
+    pendingImageDataUrl = null; pendingType = null;
+    $('scanForm').style.display = 'none';
+    $('scanEmpty').style.display = 'block';
+    hiddenInput.value = '';
+  }
+
+  $('scanForm').addEventListener('submit', async (ev)=>{
+    ev.preventDefault();
+    if(!pendingImageDataUrl || !pendingType) return;
+    const land = $('fLand').value.trim();
+    if(!land) return;
+    const id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+    const meta = {
+      id, bedrijf: $('fBedrijf').value.trim(), naam: $('fNaam').value.trim(), land,
+      telefoon: $('fTel').value.trim(), email: $('fEmail').value.trim(), type: pendingType, timestamp: Date.now()
+    };
+    $('saveBtn').disabled = true;
+    $('saveBtn').textContent = 'Opslaan…';
+    try{
+      await saveCardData(id, meta, pendingImageDataUrl);
+      cardIndex.push(meta);
+      updateStat();
+      showToast('Opgeslagen · ' + cardIndex.length + ' kaartjes totaal');
+      resetScanForm();
+    }catch(e){
+      console.error('Opslaan mislukt:', e);
+      showToast('Opslaan mislukt: ' + (e && e.message ? e.message : String(e)));
+    }
+    $('saveBtn').textContent = 'Opslaan & volgende';
+    updateSaveEnabled();
+  });
+
+  // ---------- tabs ----------
+  $('tabScan').addEventListener('click', ()=> switchTab('scan'));
+  $('tabBrowse').addEventListener('click', ()=> switchTab('browse'));
+  function switchTab(which){
+    $('tabScan').classList.toggle('active', which==='scan');
+    $('tabBrowse').classList.toggle('active', which==='browse');
+    $('viewScan').classList.toggle('active', which==='scan');
+    $('viewBrowse').classList.toggle('active', which==='browse');
+    if(which==='browse') renderBrowse();
+  }
+
+  // ---------- browse ----------
+  document.querySelectorAll('.chip[data-filter]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('.chip[data-filter]').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      browseFilter = chip.dataset.filter;
+      renderBrowse();
+    });
+  });
+  $('searchInput').addEventListener('input', renderBrowse);
+
+  function renderBrowse(){
+    const q = $('searchInput').value.trim().toLowerCase();
+    let items = cardIndex.filter(c=>{
+      if(browseFilter !== 'alle' && c.type !== browseFilter) return false;
+      if(q && !((c.bedrijf+' '+c.naam+' '+c.land).toLowerCase().includes(q))) return false;
+      return true;
+    });
+    $('emptyBrowse').style.display = items.length===0 ? 'block' : 'none';
+    const groups = {};
+    items.forEach(c=>{
+      const land = c.land && c.land.trim() ? c.land.trim() : 'Onbekend';
+      (groups[land] = groups[land] || []).push(c);
+    });
+    const landen = Object.keys(groups).sort((a,b)=>a.localeCompare(b,'nl'));
+    $('groupsWrap').innerHTML = landen.map(land=>{
+      const list = groups[land].sort((a,b)=> (a.bedrijf||a.naam||'').localeCompare(b.bedrijf||b.naam||'', 'nl'));
+      const isOpen = openGroups.has(land);
+      const rows = list.map(c=>`
+        <div class="card-row" data-id="${c.id}">
+          <div class="who">
+            <div class="naam">${escapeHtml(c.bedrijf || c.naam || 'Naamloos kaartje')}</div>
+            <div class="bedrijf">${escapeHtml(c.bedrijf && c.naam ? c.naam : '')}</div>
+          </div>
+          <div class="badge ${c.type}">${TYPE_LABELS[c.type] || 'Eindgebruiker'}</div>
+        </div>`).join('');
+      return `<div class="country-group ${isOpen?'open':''}" data-land="${escapeHtml(land)}">
+          <div class="country-tab"><span class="chevron">▶</span><span class="name">${escapeHtml(land)}</span><span class="count">${list.length}</span></div>
+          <div class="card-list">${rows}</div>
+        </div>`;
+    }).join('');
+    document.querySelectorAll('.country-tab').forEach(tab=>{
+      tab.addEventListener('click', ()=>{
+        const group = tab.closest('.country-group');
+        const land = group.dataset.land;
+        if(openGroups.has(land)){ openGroups.delete(land); group.classList.remove('open'); }
+        else { openGroups.add(land); group.classList.add('open'); }
+      });
+    });
+    document.querySelectorAll('.card-row').forEach(row=>{
+      row.addEventListener('click', ()=> openDetail(row.dataset.id));
+    });
+  }
+
+  // ---------- csv export/import ----------
+  function csvEsc(v){ v=(v==null)?'':String(v); if(/[",\n\r;]/.test(v)) v='"'+v.replace(/"/g,'""')+'"'; return v; }
+  function tsvEsc(v){ v=(v==null)?'':String(v); return v.replace(/\t/g,' ').replace(/\r?\n/g,' '); }
+
+  async function exportCSV(){
+    if(cardIndex.length === 0){ showToast('Niets om te exporteren'); return; }
+    const includePhotos = $('exportPhotos').checked;
+    const btn = $('exportBtn'); const original = btn.textContent; btn.disabled = true;
+    const total = cardIndex.length; const rows = new Array(total);
+    let doneCount=0, cursor=0; const concurrency=6;
+    async function worker(){
+      while(cursor < total){
+        const i = cursor++; const meta = cardIndex[i];
+        try{ rows[i] = includePhotos ? await getCardData(meta.id) : meta; }
+        catch(e){ rows[i] = meta; }
+        doneCount++; btn.textContent = `Bezig… ${doneCount}/${total}`;
+      }
+    }
+    await Promise.all(Array.from({length:Math.min(concurrency,total)}, worker));
+    const header = ['Bedrijf','Naam','Land','Type','Telefoon','E-mail','Datum toegevoegd'];
+    if(includePhotos) header.push('FotoBase64');
+    const lines=[header.map(csvEsc).join(',')], tsvLines=[header.map(tsvEsc).join('\t')];
+    rows.forEach(r=>{
+      const datum = r.timestamp ? new Date(r.timestamp).toLocaleDateString('nl-NL') : '';
+      const typeLabel = TYPE_LABELS[r.type] || '';
+      const fields = [r.bedrijf,r.naam,r.land,typeLabel,r.telefoon,r.email,datum];
+      if(includePhotos) fields.push(r.imageDataUrl || '');
+      lines.push(fields.map(csvEsc).join(','));
+      tsvLines.push(fields.map(tsvEsc).join('\t'));
+    });
+    const csv = '\uFEFF' + lines.join('\r\n');
+    const tsv = tsvLines.join('\r\n');
+    const filename = 'kaartenkast-export-' + new Date().toISOString().slice(0,10) + '.csv';
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    try{ await navigator.clipboard.writeText(tsv); }catch(e){}
+    btn.disabled = false; btn.textContent = original;
+    showToast('CSV gedownload · ' + total + ' kaartjes');
+  }
+  $('exportBtn').addEventListener('click', exportCSV);
+
+  function parseCSV(text){
+    const rows=[]; let row=[], field='', inQuotes=false;
+    for(let i=0;i<text.length;i++){
+      const c = text[i];
+      if(inQuotes){
+        if(c==='"'){ if(text[i+1]==='"'){ field+='"'; i++; } else inQuotes=false; }
+        else field += c;
+      } else {
+        if(c==='"') inQuotes=true;
+        else if(c===','){ row.push(field); field=''; }
+        else if(c==='\r'){}
+        else if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+        else field += c;
+      }
+    }
+    if(field.length>0 || row.length>0){ row.push(field); rows.push(row); }
+    return rows.filter(r => r.length>1 || r[0]!=='');
+  }
+
+  $('importBtn').addEventListener('click', ()=>{
+    const inp = document.createElement('input');
+    inp.type='file'; inp.accept='.csv,text/csv';
+    inp.addEventListener('change', onImportFile);
+    inp.click();
+  });
+  async function onImportFile(ev){
+    const file = ev.target.files[0]; if(!file) return;
+    const btn = $('importBtn'); const original = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Bezig…';
+    try{
+      let text = await file.text();
+      text = text.replace(/^\uFEFF/, '');
+      const rows = parseCSV(text);
+      if(rows.length < 2){ showToast('Geen gegevens gevonden'); return; }
+      const header = rows[0].map(h => h.trim().toLowerCase());
+      const idx = {bedrijf:header.indexOf('bedrijf'), naam:header.indexOf('naam'), land:header.indexOf('land'),
+        type:header.indexOf('type'), tel:header.indexOf('telefoon'), email:header.indexOf('e-mail'), foto:header.indexOf('fotobase64')};
+      let added=0, skipped=0;
+      for(let r=1;r<rows.length;r++){
+        const row = rows[r];
+        if(!row || row.every(f=>f==='')) continue;
+        const bedrijf = idx.bedrijf>-1 ? (row[idx.bedrijf]||'').trim() : '';
+        const naam = idx.naam>-1 ? (row[idx.naam]||'').trim() : '';
+        const land = idx.land>-1 ? (row[idx.land]||'').trim() : 'Onbekend';
+        const typeRaw = idx.type>-1 ? (row[idx.type]||'').trim().toLowerCase() : '';
+        const type = (typeRaw==='handelaar'||typeRaw==='machineleverancier') ? typeRaw : 'eindgebruiker';
+        const telefoon = idx.tel>-1 ? (row[idx.tel]||'').trim() : '';
+        const email = idx.email>-1 ? (row[idx.email]||'').trim() : '';
+        const foto = idx.foto>-1 ? (row[idx.foto]||'').trim() : '';
+        const isDup = cardIndex.some(c => c.bedrijf===bedrijf && c.naam===naam && c.land===land);
+        if(isDup && (bedrijf||naam)){ skipped++; continue; }
+        const id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+        const timestamp = Date.now();
+        await saveCardData(id, {id,bedrijf,naam,land,telefoon,email,type,timestamp}, foto);
+        cardIndex.push({id,bedrijf,naam,land,telefoon,email,type,timestamp});
+        added++;
+      }
+      updateStat(); renderBrowse();
+      showToast(`Geïmporteerd: ${added} kaartjes${skipped?', '+skipped+' duplicaten overgeslagen':''}`);
+    }catch(e){
+      console.error('Import mislukt:', e);
+      showToast('Import mislukt: ' + (e && e.message ? e.message : String(e)));
+    }
+    btn.disabled=false; btn.textContent=original;
+  }
+
+  // ---------- detail modal ----------
+  async function openDetail(id){
+    const rec = await getCardData(id);
+    if(!rec) return;
+    currentDetailId = id;
+    $('detailImg').src = rec.imageDataUrl || '';
+    $('mBedrijf').value = rec.bedrijf || '';
+    $('mNaam').value = rec.naam || '';
+    $('mLand').value = rec.land || '';
+    $('mTel').value = rec.telefoon || '';
+    $('mEmail').value = rec.email || '';
+    setMType(rec.type);
+    $('modalBg').classList.add('show');
+  }
+  function setMType(t){
+    mType = t;
+    $('mBtnHandelaar').className = 'type-btn' + (t==='handelaar' ? ' sel-handelaar' : '');
+    $('mBtnEindgebruiker').className = 'type-btn' + (t==='eindgebruiker' ? ' sel-eindgebruiker' : '');
+    $('mBtnMachineleverancier').className = 'type-btn' + (t==='machineleverancier' ? ' sel-machineleverancier' : '');
+  }
+  $('mBtnHandelaar').addEventListener('click', ()=> setMType('handelaar'));
+  $('mBtnEindgebruiker').addEventListener('click', ()=> setMType('eindgebruiker'));
+  $('mBtnMachineleverancier').addEventListener('click', ()=> setMType('machineleverancier'));
+  $('closeModal').addEventListener('click', ()=> $('modalBg').classList.remove('show'));
+  $('modalBg').addEventListener('click', (e)=>{ if(e.target.id==='modalBg') $('modalBg').classList.remove('show'); });
+
+  $('mSaveBtn').addEventListener('click', async ()=>{
+    if(!currentDetailId) return;
+    const rec = await getCardData(currentDetailId);
+    if(!rec) return;
+    const meta = {
+      id: rec.id,
+      bedrijf: $('mBedrijf').value.trim(), naam: $('mNaam').value.trim(),
+      land: $('mLand').value.trim() || 'Onbekend', telefoon: $('mTel').value.trim(),
+      email: $('mEmail').value.trim(), type: mType || rec.type, timestamp: rec.timestamp
+    };
+    await saveCardData(currentDetailId, meta, rec.imageDataUrl);
+    const i = cardIndex.findIndex(c=>c.id===currentDetailId);
+    if(i>-1) cardIndex[i] = meta;
+    updateStat();
+    $('modalBg').classList.remove('show');
+    renderBrowse();
+    showToast('Wijzigingen opgeslagen');
+  });
+
+  $('mDelBtn').addEventListener('click', async ()=>{
+    if(!currentDetailId) return;
+    if(!confirm('Dit kaartje definitief verwijderen?')) return;
+    await deleteCardData(currentDetailId);
+    cardIndex = cardIndex.filter(c=>c.id!==currentDetailId);
+    updateStat();
+    $('modalBg').classList.remove('show');
+    renderBrowse();
+    showToast('Kaartje verwijderd');
+  });
+
+  // ---------- service worker ----------
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    });
+  }
+
+  // ---------- init ----------
+  (async function init(){
+    fillCountryList();
+    try{
+      await loadIndex();
+    }catch(e){
+      console.error('IndexedDB niet beschikbaar:', e);
+      $('dbBanner').classList.add('show');
+    }
+    updateStat();
+    renderBrowse();
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if(!isStandalone){ $('installTip').classList.add('show'); }
+  })();
+
+})();
+</script>
+</body>
+</html>
