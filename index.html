@@ -13,6 +13,7 @@
 <link rel="icon" href="./icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
   :root{
     --paper:#D8C8A0; --paper-dark:#C7B487; --card:#FBF6E8; --card-edge:#E7DCC0;
@@ -46,22 +47,22 @@
   .view.active{display:block;}
 
   .scan-card{background:var(--card);border:1px solid var(--card-edge);border-radius:10px;box-shadow:var(--shadow);padding:20px;}
-  .api-key-box{background:var(--paper-dark);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:14px;}
-  .api-key-box label{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);display:block;margin-bottom:4px;}
-  .api-key-box input{width:100%;padding:8px 10px;border:1px solid var(--card-edge);border-radius:6px;background:#fff;font-family:'IBM Plex Mono',monospace;font-size:13px;}
-
-  .empty-state{text-align:center;padding:10px 6px 10px;}
+  .empty-state{text-align:center;padding:18px 6px 10px;}
   .empty-state p{color:var(--ink-soft);font-size:14.5px;line-height:1.5;margin:10px 0 22px;}
   .camera-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:16px;background:var(--tab-green);color:#F3EFDE;border:none;border-radius:9px;font-family:'Inter',sans-serif;font-weight:600;font-size:16px;cursor:pointer;box-shadow:0 3px 0 var(--tab-green-dark);}
   .camera-btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--tab-green-dark);}
   .camera-btn svg{width:22px;height:22px;flex-shrink:0;}
+  #photoInput{display:none;}
 
   .preview-wrap{display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;}
   .preview-wrap img{width:96px;height:96px;object-fit:cover;border-radius:6px;border:1px solid var(--card-edge);box-shadow:0 2px 6px rgba(0,0,0,0.15);flex-shrink:0;}
-  .ocr-status{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);flex:1;padding-top:8px;word-break:break-word;}
+  .ocr-status{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);flex:1;padding-top:8px;}
   .ocr-status.busy::after{content:'…';}
   .ocr-status.err{color:var(--rust);}
   .ocr-status.ok{color:var(--tab-green-dark);}
+
+  .raw-box{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-soft);background:#F3EEDD;border:1px solid var(--card-edge);border-radius:6px;padding:8px 10px;margin-bottom:14px;white-space:pre-wrap;max-height:110px;overflow-y:auto;display:none;}
+  .raw-label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);margin-bottom:4px;display:none;}
 
   label.field{display:block;margin-bottom:13px;}
   label.field span{display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);margin-bottom:4px;}
@@ -126,8 +127,8 @@
     <div class="stat" id="statLine">0 kaartjes bewaard</div>
   </header>
 
-  <div class="banner" id="dbBanner">⚠ Dit toestel/deze browser staat geen opslag toe (bijv. privénavigatie). Zet privénavigatie uit en herlaad de pagina.</div>
-  <div class="banner install-tip" id="installTip">💡 Tip: zet deze pagina op je beginscherm voor het app-gevoel.</div>
+  <div class="banner" id="dbBanner">⚠ Dit toestel/deze browser staat geen opslag toe (bijv. privénavigatie). Zet privénavigatie uit en herlaad de pagina, anders gaat je werk verloren.</div>
+  <div class="banner install-tip" id="installTip">💡 Tip: zet deze pagina op je beginscherm voor het app-gevoel — in Safari via Deel-knop → "Zet op beginscherm", in Chrome via het menu → "App installeren".</div>
 
   <nav class="tabs">
     <button id="tabScan" class="active">Scannen</button>
@@ -136,29 +137,27 @@
 
   <section class="view active" id="viewScan">
     <div class="scan-card">
-      
-      <div class="api-key-box">
-        <label for="apiKeyInput">Claude API-Sleutel:</label>
-        <input type="password" id="apiKeyInput" placeholder="sk-ant-api..." autocomplete="off">
+      <div class="ai-status-row" id="aiStatusRow" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-soft);">
+        <span id="aiStatusText">📖 Lokale herkenning (gratis)</span>
+        <span id="aiSettingsLink" style="text-decoration:underline;cursor:pointer;">⚙ AI-herkenning instellen</span>
       </div>
-
       <div id="scanEmpty" class="empty-state">
-        <p>Maak een foto van een visitekaartje of kies een bestand. Claude AI leest de gegevens automatisch uit!</p>
-        
-        <input type="file" id="hiddenFileInput" accept="image/*" style="display:none;">
-        
+        <p>Maak een foto van een visitekaartje. De tekst wordt lokaal op je toestel gelezen (geen internet nodig voor het lezen zelf) — jij vult bedrijf, naam en land aan, kiest het type, en slaat op.</p>
         <button class="camera-btn" id="openCamera">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
-          Maak foto / kies bestand
+          Maak foto
         </button>
       </div>
 
       <form id="scanForm" style="display:none;">
         <div class="preview-wrap">
           <img id="previewImg" src="" alt="">
-          <div id="ocrStatus" class="ocr-status">Bezig met analyseren via AI…</div>
+          <div id="ocrStatus" class="ocr-status">Bezig met lezen…</div>
         </div>
         <span class="retry-link" id="retryOcr" style="display:none;">↻ Opnieuw proberen</span>
+
+        <div class="raw-label" id="rawLabel">Herkende tekst (kopieer wat je nodig hebt)</div>
+        <div class="raw-box" id="rawBox"></div>
 
         <label class="field"><span>Bedrijf</span><input class="txt" id="fBedrijf" type="text" placeholder="Bedrijfsnaam"></label>
         <label class="field"><span>Naam</span><input class="txt" id="fNaam" type="text" placeholder="Contactpersoon"></label>
@@ -223,12 +222,27 @@
   </div>
 </div>
 
+<div class="modal-bg" id="aiSettingsModal">
+  <div class="modal">
+    <div class="close-modal"><span id="closeAiSettings">Sluiten ✕</span></div>
+    <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;margin:0 0 14px;">
+      Vul je Anthropic API-sleutel in voor slimmere herkenning (bedrijf, naam én land worden dan automatisch ingevuld). De sleutel wordt alleen lokaal in deze browser bewaard. Laat leeg om de gratis lokale herkenning te blijven gebruiken.
+    </p>
+    <label class="field"><span>Anthropic API-sleutel</span><input class="txt" id="apiKeyInput" type="password" placeholder="sk-ant-..." autocomplete="off"></label>
+    <div class="modal-actions">
+      <button class="save-btn" id="saveApiKeyBtn">Opslaan</button>
+      <button class="del-btn" id="clearApiKeyBtn">Verwijderen</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 (function(){
   "use strict";
 
+  // ---------- state ----------
   let cardIndex = [];
   let pendingImageDataUrl = null;
   let pendingType = null;
@@ -239,12 +253,7 @@
   const TYPE_LABELS = {handelaar:'Handelaar', eindgebruiker:'Eindgebruiker', machineleverancier:'Machineleverancier'};
   const $ = id => document.getElementById(id);
 
-  const apiKeyInput = $('apiKeyInput');
-  apiKeyInput.value = localStorage.getItem('claude_api_key') || '';
-  apiKeyInput.addEventListener('input', () => {
-    localStorage.setItem('claude_api_key', apiKeyInput.value.trim());
-  });
-
+  // ---------- IndexedDB laag (echte, blijvende opslag) ----------
   const DB_NAME = 'kaartenkast-db', DB_VERSION = 1;
   let dbPromise = null;
   function openDB(){
@@ -326,6 +335,7 @@
     setTimeout(()=>t.classList.remove('show'), 2400);
   }
 
+  // ---------- landenlijst ----------
   function fillCountryList(){
     let names = [];
     try{
@@ -342,16 +352,140 @@
     return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  // ---------- landcode-gok op basis van telefoonnummer ----------
+  const CALLING_CODES = {
+    '1':'Verenigde Staten','7':'Rusland','20':'Egypte','27':'Zuid-Afrika','30':'Griekenland','31':'Nederland',
+    '32':'België','33':'Frankrijk','34':'Spanje','36':'Hongarije','39':'Italië','40':'Roemenië','41':'Zwitserland',
+    '43':'Oostenrijk','44':'Verenigd Koninkrijk','45':'Denemarken','46':'Zweden','47':'Noorwegen','48':'Polen',
+    '49':'Duitsland','51':'Peru','52':'Mexico','54':'Argentinië','55':'Brazilië','56':'Chili','57':'Colombia',
+    '58':'Venezuela','60':'Maleisië','61':'Australië','62':'Indonesië','63':'Filipijnen','64':'Nieuw-Zeeland',
+    '65':'Singapore','66':'Thailand','81':'Japan','82':'Zuid-Korea','84':'Vietnam','86':'China','90':'Turkije',
+    '91':'India','92':'Pakistan','93':'Afghanistan','94':'Sri Lanka','95':'Myanmar','98':'Iran',
+    '212':'Marokko','213':'Algerije','216':'Tunesië','218':'Libië','220':'Gambia','233':'Ghana','234':'Nigeria',
+    '254':'Kenia','255':'Tanzania','256':'Oeganda','260':'Zambia','263':'Zimbabwe','351':'Portugal','352':'Luxemburg',
+    '353':'Ierland','354':'IJsland','355':'Albanië','356':'Malta','357':'Cyprus','358':'Finland','359':'Bulgarije',
+    '370':'Litouwen','371':'Letland','372':'Estland','380':'Oekraïne','381':'Servië','385':'Kroatië','386':'Slovenië',
+    '420':'Tsjechië','421':'Slowakije','852':'Hongkong','853':'Macau','886':'Taiwan','962':'Jordanië','963':'Syrië',
+    '964':'Irak','965':'Koeweit','966':'Saoedi-Arabië','967':'Jemen','968':'Oman','971':'Verenigde Arabische Emiraten',
+    '972':'Israël','973':'Bahrein','974':'Qatar','975':'Bhutan','977':'Nepal','992':'Tadzjikistan','994':'Azerbeidzjan',
+    '995':'Georgië','998':'Oezbekistan'
+  };
+  function guessCountryFromPhone(phone){
+    if(!phone) return '';
+    const digits = phone.replace(/[^\d+]/g,'');
+    if(!digits.startsWith('+')) return '';
+    const num = digits.slice(1);
+    for(const len of [3,2,1]){
+      const prefix = num.slice(0, len);
+      if(CALLING_CODES[prefix]) return CALLING_CODES[prefix];
+    }
+    return '';
+  }
+
+  // ---------- OCR (Tesseract.js, lokaal in de browser) ----------
+  let ocrWorkerPromise = null;
+  function getOcrWorker(){
+    if(!ocrWorkerPromise){
+      ocrWorkerPromise = Tesseract.createWorker('eng', 1, {
+        logger: m => {
+          if(m.status === 'recognizing text' && typeof m.progress === 'number'){
+            $('ocrStatus').textContent = `Bezig met lezen… ${Math.round(m.progress*100)}%`;
+          } else if(m.status && m.status.indexOf('loading') > -1){
+            $('ocrStatus').textContent = 'Taalmodel laden (eenmalig, ca. 1-2 sec)…';
+          }
+        }
+      });
+    }
+    return ocrWorkerPromise;
+  }
+
+  function extractFields(text){
+    const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+    const phoneMatch = text.match(/(\+\d[\d\s\-\(\)]{6,}\d)/) || text.match(/(\d[\d\s\-\(\)]{7,}\d)/);
+    const email = emailMatch ? emailMatch[0] : '';
+    const telefoon = phoneMatch ? phoneMatch[0].trim() : '';
+    const land = guessCountryFromPhone(telefoon);
+    return {email, telefoon, land};
+  }
+
+  // ---------- optionele AI-herkenning (eigen Anthropic API-sleutel) ----------
+  const API_KEY_STORAGE = 'kaartenkast-anthropic-key';
+  function getApiKey(){ return localStorage.getItem(API_KEY_STORAGE) || ''; }
+  function setApiKey(k){
+    if(k) localStorage.setItem(API_KEY_STORAGE, k);
+    else localStorage.removeItem(API_KEY_STORAGE);
+    updateAiStatus();
+  }
+  function updateAiStatus(){
+    const has = !!getApiKey();
+    $('aiStatusText').textContent = has ? '🔑 AI-herkenning actief' : '📖 Lokale herkenning (gratis)';
+  }
+  $('aiSettingsLink').addEventListener('click', ()=>{
+    $('apiKeyInput').value = getApiKey();
+    $('aiSettingsModal').classList.add('show');
+  });
+  $('closeAiSettings').addEventListener('click', ()=> $('aiSettingsModal').classList.remove('show'));
+  $('aiSettingsModal').addEventListener('click', e=>{ if(e.target.id==='aiSettingsModal') $('aiSettingsModal').classList.remove('show'); });
+  $('saveApiKeyBtn').addEventListener('click', ()=>{
+    setApiKey($('apiKeyInput').value.trim());
+    $('aiSettingsModal').classList.remove('show');
+    showToast('Opgeslagen — AI-herkenning is nu actief');
+  });
+  $('clearApiKeyBtn').addEventListener('click', ()=>{
+    setApiKey('');
+    $('apiKeyInput').value = '';
+    $('aiSettingsModal').classList.remove('show');
+    showToast('Sleutel verwijderd — terug naar lokale herkenning');
+  });
+
+  async function analyzeWithClaude(dataUrl, apiKey){
+    const base64 = dataUrl.split(',')[1];
+    const prompt = `Visitekaartje. Geef ALLEEN geldig JSON terug, geen markdown, geen uitleg:
+{"bedrijf":"", "naam":"", "land":"", "telefoon":"", "email":""}
+Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/website-extensie.`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{
+          role: 'user',
+          content: [
+            {type:'image', source:{type:'base64', media_type:'image/jpeg', data: base64}},
+            {type:'text', text: prompt}
+          ]
+        }]
+      })
+    });
+    const bodyText = await response.text();
+    if(!response.ok){
+      throw new Error('API-fout ' + response.status + ': ' + bodyText.slice(0,200));
+    }
+    let data;
+    try{ data = JSON.parse(bodyText); }
+    catch(e){ throw new Error('Onverwacht antwoord van API: ' + bodyText.slice(0,200)); }
+    const textBlock = (data.content||[]).find(b => b.type === 'text');
+    const raw = textBlock ? textBlock.text : '';
+    const cleaned = raw.replace(/```json|```/g, '').trim();
+    try{
+      const parsed = JSON.parse(cleaned);
+      parsed._raw = raw;
+      return parsed;
+    }catch(e){
+      return {_raw: raw};
+    }
+  }
+
   async function onPhoto(ev){
     const file = ev.target.files[0];
     if(!file) return;
-
-    const apiKey = localStorage.getItem('claude_api_key');
-    if(!apiKey){
-      alert("Vul eerst bovenaan je Claude API-sleutel in!");
-      return;
-    }
-
     pendingImageDataUrl = await compressForStorage(file);
     pendingType = null;
 
@@ -360,79 +494,50 @@
     $('previewImg').src = pendingImageDataUrl;
     ['fBedrijf','fNaam','fLand','fTel','fEmail'].forEach(id => $(id).value = '');
     setType(null);
+    $('rawBox').style.display = 'none';
+    $('rawLabel').style.display = 'none';
     updateSaveEnabled();
 
-    await runClaudeAI(pendingImageDataUrl, apiKey, file.type || 'image/jpeg');
+    await runOCR();
   }
 
-  async function runClaudeAI(base64DataUrl, apiKey, fileType){
-    $('ocrStatus').textContent = 'Bezig met analyseren via AI…';
+  async function runOCR(){
+    $('ocrStatus').textContent = 'Bezig met lezen…';
     $('ocrStatus').className = 'ocr-status busy';
     $('retryOcr').style.display = 'none';
-
-    try {
-      const base64Image = base64DataUrl.split(',')[1];
-      const mediaType = fileType.includes('png') ? 'image/png' : 'image/jpeg';
-
-      // DIRECT VERZOEK NAAR ANTHROPIC (ZONDER PROXY)
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: "claude-3-haiku-20240307",
-          max_tokens: 1000,
-          messages: [{
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: { type: "base64", media_type: mediaType, data: base64Image }
-              },
-              {
-                type: "text",
-                text: "Lees dit visitekaartje uit. Geef uitsluitend een JSON-object terug met exact de sleutels: \"bedrijf\", \"naam\", \"land\", \"telefoon\", \"email\". Als het land niet op het kaartje staat, probeer het te herleiden uit het telefoonnummer of e-mailadres. Geen extra tekst, alleen geldige JSON."
-              }
-            ]
-          }]
-        })
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok || data.error) {
-        const errDetail = data.error ? (data.error.message || JSON.stringify(data.error)) : response.statusText;
-        throw new Error(`API Fout (${response.status}): ${errDetail}`);
+    const apiKey = getApiKey();
+    try{
+      let fields, rawText = '';
+      if(apiKey){
+        fields = await analyzeWithClaude(pendingImageDataUrl, apiKey);
+        rawText = fields._raw || '';
+      } else {
+        const worker = await getOcrWorker();
+        const { data } = await worker.recognize(pendingImageDataUrl);
+        rawText = (data && data.text) ? data.text.trim() : '';
+        fields = extractFields(rawText);
       }
-
-      const responseText = data.content[0].text.replace(/```json|```/g, '').trim();
-      const cardData = JSON.parse(responseText);
-
-      $('fBedrijf').value = cardData.bedrijf || '';
-      $('fNaam').value = cardData.naam || '';
-      $('fLand').value = cardData.land || '';
-      $('fTel').value = cardData.telefoon || '';
-      $('fEmail').value = cardData.email || '';
-
-      $('ocrStatus').textContent = '✅ Gegevens succesvol uitgelezen!';
+      $('fBedrijf').value = fields.bedrijf || '';
+      $('fNaam').value = fields.naam || '';
+      $('fTel').value = fields.telefoon || '';
+      $('fEmail').value = fields.email || '';
+      $('fLand').value = fields.land || '';
+      $('ocrStatus').textContent = apiKey ? 'Gelezen door AI — controleer de gegevens' : 'Gelezen — vul bedrijf, naam en land aan';
       $('ocrStatus').className = 'ocr-status ok';
-    } catch(e) {
-      console.error('Claude API Fout:', e);
-      $('ocrStatus').textContent = 'Fout: ' + (e && e.message ? e.message : String(e));
+      if(rawText){
+        $('rawLabel').style.display = 'block';
+        $('rawBox').style.display = 'block';
+        $('rawBox').textContent = rawText;
+      }
+    }catch(e){
+      console.error('OCR mislukt:', e);
+      $('ocrStatus').textContent = 'Lezen mislukt: ' + (e && e.message ? e.message : String(e));
       $('ocrStatus').className = 'ocr-status err';
       $('retryOcr').style.display = 'inline-block';
     }
     updateSaveEnabled();
   }
-
-  $('retryOcr').addEventListener('click', () => {
-    const apiKey = localStorage.getItem('claude_api_key');
-    if(pendingImageDataUrl && apiKey) runClaudeAI(pendingImageDataUrl, apiKey, 'image/jpeg');
-  });
+  $('retryOcr').addEventListener('click', runOCR);
 
   function resizeToDataUrl(file, maxWidth, quality){
     return new Promise((resolve, reject)=>{
@@ -467,11 +572,11 @@
     return dataUrl;
   }
 
-  const hiddenInput = $('hiddenFileInput');
-  hiddenInput.addEventListener('change', onPhoto);
-  
   $('openCamera').addEventListener('click', ()=>{
-    hiddenInput.click();
+    const inp = document.createElement('input');
+    inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+    inp.addEventListener('change', onPhoto);
+    inp.click();
   });
 
   function setType(t){
@@ -495,7 +600,6 @@
     pendingImageDataUrl = null; pendingType = null;
     $('scanForm').style.display = 'none';
     $('scanEmpty').style.display = 'block';
-    hiddenInput.value = '';
   }
 
   $('scanForm').addEventListener('submit', async (ev)=>{
@@ -524,6 +628,7 @@
     updateSaveEnabled();
   });
 
+  // ---------- tabs ----------
   $('tabScan').addEventListener('click', ()=> switchTab('scan'));
   $('tabBrowse').addEventListener('click', ()=> switchTab('browse'));
   function switchTab(which){
@@ -534,6 +639,7 @@
     if(which==='browse') renderBrowse();
   }
 
+  // ---------- browse ----------
   document.querySelectorAll('.chip[data-filter]').forEach(chip=>{
     chip.addEventListener('click', ()=>{
       document.querySelectorAll('.chip[data-filter]').forEach(c=>c.classList.remove('active'));
@@ -587,6 +693,7 @@
     });
   }
 
+  // ---------- csv export/import (handig als extra back-up) ----------
   function csvEsc(v){ v=(v==null)?'':String(v); if(/[",\n\r;]/.test(v)) v='"'+v.replace(/"/g,'""')+'"'; return v; }
   function tsvEsc(v){ v=(v==null)?'':String(v); return v.replace(/\t/g,' ').replace(/\r?\n/g,' '); }
 
@@ -696,6 +803,7 @@
     btn.disabled=false; btn.textContent=original;
   }
 
+  // ---------- detail modal ----------
   async function openDetail(id){
     const rec = await getCardData(id);
     if(!rec) return;
@@ -751,14 +859,17 @@
     showToast('Kaartje verwijderd');
   });
 
+  // ---------- service worker (voor installeerbaarheid/offline) ----------
   if('serviceWorker' in navigator){
     window.addEventListener('load', ()=>{
       navigator.serviceWorker.register('./sw.js').catch(()=>{});
     });
   }
 
+  // ---------- init ----------
   (async function init(){
     fillCountryList();
+    updateAiStatus();
     try{
       await loadIndex();
     }catch(e){
