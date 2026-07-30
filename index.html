@@ -375,7 +375,6 @@
       const base64Image = base64DataUrl.split(',')[1];
       const mediaType = fileType.includes('png') ? 'image/png' : 'image/jpeg';
 
-      // GEBRUIK VAN CORS-PROXY OM 'LOAD FAILED' / CORS TE OMZEILEN
       const targetUrl = 'https://api.anthropic.com/v1/messages';
       const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
 
@@ -384,6 +383,7 @@
         headers: {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
           'content-type': 'application/json'
         },
         body: JSON.stringify({
