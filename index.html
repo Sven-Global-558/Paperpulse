@@ -146,7 +146,6 @@
       <div id="scanEmpty" class="empty-state">
         <p>Maak een foto van een visitekaartje of kies een bestand. Claude AI leest de gegevens automatisch uit!</p>
         
-        <!-- Onzichtbaar bestand-invoerveld dat universeel werkt op mobiel & desktop -->
         <input type="file" id="hiddenFileInput" accept="image/*" style="display:none;">
         
         <button class="camera-btn" id="openCamera">
@@ -231,7 +230,6 @@
 (function(){
   "use strict";
 
-  // ---------- state ----------
   let cardIndex = [];
   let pendingImageDataUrl = null;
   let pendingType = null;
@@ -242,14 +240,12 @@
   const TYPE_LABELS = {handelaar:'Handelaar', eindgebruiker:'Eindgebruiker', machineleverancier:'Machineleverancier'};
   const $ = id => document.getElementById(id);
 
-  // ---------- API Sleutel opslaan ----------
   const apiKeyInput = $('apiKeyInput');
   apiKeyInput.value = localStorage.getItem('claude_api_key') || '';
   apiKeyInput.addEventListener('input', () => {
     localStorage.setItem('claude_api_key', apiKeyInput.value.trim());
   });
 
-  // ---------- IndexedDB laag ----------
   const DB_NAME = 'kaartenkast-db', DB_VERSION = 1;
   let dbPromise = null;
   function openDB(){
@@ -331,7 +327,6 @@
     setTimeout(()=>t.classList.remove('show'), 2400);
   }
 
-  // ---------- landenlijst ----------
   function fillCountryList(){
     let names = [];
     try{
@@ -348,7 +343,6 @@
     return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  // ---------- Claude AI Herkenning ----------
   async function onPhoto(ev){
     const file = ev.target.files[0];
     if(!file) return;
@@ -381,13 +375,16 @@
       const base64Image = base64DataUrl.split(',')[1];
       const mediaType = fileType.includes('png') ? 'image/png' : 'image/jpeg';
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      // GEBRUIK VAN CORS-PROXY OM 'LOAD FAILED' / CORS TE OMZEILEN
+      const targetUrl = 'https://api.anthropic.com/v1/messages';
+      const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(targetUrl);
+
+      const response = await fetch(proxyUrl, {
         method: 'POST',
         headers: {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-          'anthropic-dangerously-allow-browser': 'true'
+          'content-type': 'application/json'
         },
         body: JSON.stringify({
           model: "claude-3-5-haiku-20241022",
@@ -409,7 +406,7 @@
       });
 
       const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
 
       const responseText = data.content[0].text.replace(/```json|```/g, '').trim();
       const cardData = JSON.parse(responseText);
@@ -469,7 +466,6 @@
     return dataUrl;
   }
 
-  // Bind de knop aan de verborgen file-input
   const hiddenInput = $('hiddenFileInput');
   hiddenInput.addEventListener('change', onPhoto);
   
@@ -527,7 +523,6 @@
     updateSaveEnabled();
   });
 
-  // ---------- tabs ----------
   $('tabScan').addEventListener('click', ()=> switchTab('scan'));
   $('tabBrowse').addEventListener('click', ()=> switchTab('browse'));
   function switchTab(which){
@@ -538,7 +533,6 @@
     if(which==='browse') renderBrowse();
   }
 
-  // ---------- browse ----------
   document.querySelectorAll('.chip[data-filter]').forEach(chip=>{
     chip.addEventListener('click', ()=>{
       document.querySelectorAll('.chip[data-filter]').forEach(c=>c.classList.remove('active'));
@@ -592,7 +586,6 @@
     });
   }
 
-  // ---------- csv export/import ----------
   function csvEsc(v){ v=(v==null)?'':String(v); if(/[",\n\r;]/.test(v)) v='"'+v.replace(/"/g,'""')+'"'; return v; }
   function tsvEsc(v){ v=(v==null)?'':String(v); return v.replace(/\t/g,' ').replace(/\r?\n/g,' '); }
 
@@ -702,7 +695,6 @@
     btn.disabled=false; btn.textContent=original;
   }
 
-  // ---------- detail modal ----------
   async function openDetail(id){
     const rec = await getCardData(id);
     if(!rec) return;
@@ -758,14 +750,12 @@
     showToast('Kaartje verwijderd');
   });
 
-  // ---------- service worker ----------
   if('serviceWorker' in navigator){
     window.addEventListener('load', ()=>{
       navigator.serviceWorker.register('./sw.js').catch(()=>{});
     });
   }
 
-  // ---------- init ----------
   (async function init(){
     fillCountryList();
     try{
