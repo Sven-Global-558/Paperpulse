@@ -159,6 +159,8 @@
         <div class="raw-label" id="rawLabel">Herkende tekst (kopieer wat je nodig hebt)</div>
         <div class="raw-box" id="rawBox"></div>
 
+        <div id="dupWarning" style="display:none;background:var(--rust-soft);border:1px solid var(--rust);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#7A3610;"></div>
+
         <label class="field"><span>Bedrijf</span><input class="txt" id="fBedrijf" type="text" placeholder="Bedrijfsnaam"></label>
         <label class="field"><span>Naam</span><input class="txt" id="fNaam" type="text" placeholder="Contactpersoon"></label>
         <label class="field"><span>Land</span><input class="txt" id="fLand" type="text" list="landenLijst" placeholder="Land"></label>
@@ -496,6 +498,9 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
     setType(null);
     $('rawBox').style.display = 'none';
     $('rawLabel').style.display = 'none';
+    $('dupWarning').style.display = 'none';
+    updateExistingId = null;
+    $('saveBtn').textContent = 'Opslaan & volgende';
     updateSaveEnabled();
 
     await runOCR();
@@ -524,6 +529,7 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       $('fLand').value = fields.land || '';
       $('ocrStatus').textContent = apiKey ? 'Gelezen door AI — controleer de gegevens' : 'Gelezen — vul bedrijf, naam en land aan';
       $('ocrStatus').className = 'ocr-status ok';
+      renderDupWarning();
       if(rawText){
         $('rawLabel').style.display = 'block';
         $('rawBox').style.display = 'block';
@@ -595,9 +601,62 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
   }
   $('fLand').addEventListener('input', updateSaveEnabled);
 
+  // ---------- duplicaatherkenning ----------
+  let updateExistingId = null;
+  function normalizeStr(s){ return (s||'').toLowerCase().trim().replace(/\s+/g,' '); }
+  function findDuplicates(){
+    const email = normalizeStr($('fEmail').value);
+    const bedrijf = normalizeStr($('fBedrijf').value);
+    const naam = normalizeStr($('fNaam').value);
+    const tel = ($('fTel').value||'').replace(/\D/g,'');
+    if(!email && !(bedrijf && naam) && tel.length < 6) return [];
+    return cardIndex.filter(c=>{
+      if(email && normalizeStr(c.email) === email) return true;
+      if(bedrijf && naam && normalizeStr(c.bedrijf)===bedrijf && normalizeStr(c.naam)===naam) return true;
+      const cTel = (c.telefoon||'').replace(/\D/g,'');
+      if(tel.length>=6 && cTel.length>=6 && cTel.slice(-8)===tel.slice(-8)) return true;
+      return false;
+    });
+  }
+  function renderDupWarning(){
+    const box = $('dupWarning');
+    const matches = findDuplicates();
+    if(matches.length === 0){
+      box.style.display = 'none';
+      box.innerHTML = '';
+      updateExistingId = null;
+      $('saveBtn').textContent = 'Opslaan & volgende';
+      return;
+    }
+    box.style.display = 'block';
+    box.innerHTML = '<div style="font-weight:600;margin-bottom:6px;">⚠ Mogelijk al eerder gescand</div>' +
+      matches.slice(0,3).map(m=>{
+        const datum = m.timestamp ? new Date(m.timestamp).toLocaleDateString('nl-NL') : '';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;flex-wrap:wrap;">
+          <span style="flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(m.bedrijf||m.naam||'Naamloos')} — ${escapeHtml(m.land||'')} · ${datum}</span>
+          <span class="dup-view" data-id="${m.id}" style="text-decoration:underline;cursor:pointer;flex-shrink:0;">bekijk</span>
+          <span class="dup-update" data-id="${m.id}" style="text-decoration:underline;cursor:pointer;flex-shrink:0;">bijwerken i.p.v. nieuw</span>
+        </div>`;
+      }).join('') +
+      '<div style="margin-top:6px;font-size:11px;opacity:0.85;">Ander/nieuw kaartje? Negeer dit gewoon en sla op als nieuw.</div>';
+    box.querySelectorAll('.dup-view').forEach(el=>{
+      el.addEventListener('click', ()=> openDetail(el.dataset.id));
+    });
+    box.querySelectorAll('.dup-update').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        updateExistingId = el.dataset.id;
+        $('saveBtn').textContent = '✓ Bijwerken (bestaand kaartje)';
+        showToast('Dit vervangt het bestaande kaartje bij opslaan');
+      });
+    });
+  }
+  ['fBedrijf','fNaam','fEmail','fTel'].forEach(id => $(id).addEventListener('input', renderDupWarning));
+
   $('cancelScan').addEventListener('click', resetScanForm);
   function resetScanForm(){
     pendingImageDataUrl = null; pendingType = null;
+    updateExistingId = null;
+    $('dupWarning').style.display = 'none';
     $('scanForm').style.display = 'none';
     $('scanEmpty').style.display = 'block';
   }
@@ -607,18 +666,24 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
     if(!pendingImageDataUrl || !pendingType) return;
     const land = $('fLand').value.trim();
     if(!land) return;
-    const id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+    const isUpdate = !!updateExistingId;
+    const id = updateExistingId || ('c_' + Date.now() + '_' + Math.random().toString(36).slice(2,7));
     const meta = {
       id, bedrijf: $('fBedrijf').value.trim(), naam: $('fNaam').value.trim(), land,
       telefoon: $('fTel').value.trim(), email: $('fEmail').value.trim(), type: pendingType, timestamp: Date.now()
     };
     $('saveBtn').disabled = true;
-    $('saveBtn').textContent = 'Opslaan…';
+    $('saveBtn').textContent = isUpdate ? 'Bijwerken…' : 'Opslaan…';
     try{
       await saveCardData(id, meta, pendingImageDataUrl);
-      cardIndex.push(meta);
+      if(isUpdate){
+        const i = cardIndex.findIndex(c=>c.id===id);
+        if(i>-1) cardIndex[i] = meta; else cardIndex.push(meta);
+      } else {
+        cardIndex.push(meta);
+      }
       updateStat();
-      showToast('Opgeslagen · ' + cardIndex.length + ' kaartjes totaal');
+      showToast(isUpdate ? 'Bestaand kaartje bijgewerkt' : 'Opgeslagen · ' + cardIndex.length + ' kaartjes totaal');
       resetScanForm();
     }catch(e){
       console.error('Opslaan mislukt:', e);
