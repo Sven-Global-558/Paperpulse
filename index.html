@@ -14,6 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     --paper:#EEF2F7; --paper-dark:#DCE6F0; --card:#FFFFFF; --card-edge:#E1E7EE;
@@ -189,10 +190,11 @@
       <div class="chip" data-filter="machineleverancier">Machineleverancier</div>
     </div>
     <div class="chips" style="margin-top:0;">
-      <button class="chip export-chip" id="exportBtn">⬇ CSV exporteren</button>
+      <button class="chip export-chip" id="exportXlsxBtn" style="background:var(--tab-green);color:#fff;">⬇ Excel (.xlsx)</button>
+      <button class="chip export-chip" id="exportBtn">⬇ CSV</button>
       <button class="chip export-chip" id="importBtn">⬆ CSV importeren</button>
       <label style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);display:flex;align-items:center;gap:5px;margin-left:auto;">
-        <input type="checkbox" id="exportPhotos"> incl. foto's
+        <input type="checkbox" id="exportPhotos"> incl. foto's (CSV)
       </label>
     </div>
     <div id="groupsWrap"></div>
@@ -729,17 +731,28 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       (groups[land] = groups[land] || []).push(c);
     });
     const landen = Object.keys(groups).sort((a,b)=>a.localeCompare(b,'nl'));
+    const TYPE_ORDER = {handelaar:0, eindgebruiker:1, machineleverancier:2};
     $('groupsWrap').innerHTML = landen.map(land=>{
-      const list = groups[land].sort((a,b)=> (a.bedrijf||a.naam||'').localeCompare(b.bedrijf||b.naam||'', 'nl'));
+      const list = groups[land].sort((a,b)=>{
+        const t = (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1);
+        if(t !== 0) return t;
+        return (a.bedrijf||a.naam||'').localeCompare(b.bedrijf||b.naam||'', 'nl');
+      });
       const isOpen = openGroups.has(land);
-      const rows = list.map(c=>`
-        <div class="card-row" data-id="${c.id}">
+      let lastType = null;
+      const rows = list.map(c=>{
+        const subHeader = c.type !== lastType
+          ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);margin:10px 0 4px 2px;">${TYPE_LABELS[c.type] || 'Eindgebruiker'}</div>`
+          : '';
+        lastType = c.type;
+        return `${subHeader}<div class="card-row" data-id="${c.id}">
           <div class="who">
             <div class="naam">${escapeHtml(c.bedrijf || c.naam || 'Naamloos kaartje')}</div>
             <div class="bedrijf">${escapeHtml(c.bedrijf && c.naam ? c.naam : '')}</div>
           </div>
           <div class="badge ${c.type}">${TYPE_LABELS[c.type] || 'Eindgebruiker'}</div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
       return `<div class="country-group ${isOpen?'open':''}" data-land="${escapeHtml(land)}">
           <div class="country-tab"><span class="chevron">▶</span><span class="name">${escapeHtml(land)}</span><span class="count">${list.length}</span></div>
           <div class="card-list">${rows}</div>
@@ -801,6 +814,36 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
     showToast('CSV gedownload · ' + total + ' kaartjes');
   }
   $('exportBtn').addEventListener('click', exportCSV);
+
+  async function exportXLSX(){
+    if(cardIndex.length === 0){ showToast('Niets om te exporteren'); return; }
+    const btn = $('exportXlsxBtn'); const original = btn.textContent; btn.disabled = true;
+    btn.textContent = 'Bezig…';
+    try{
+      const header = ['Bedrijf','Naam','Land','Type','Telefoon','E-mail','Datum toegevoegd'];
+      const sorted = [...cardIndex].sort((a,b)=>{
+        const l = (a.land||'').localeCompare(b.land||'', 'nl');
+        if(l !== 0) return l;
+        return (a.bedrijf||a.naam||'').localeCompare(b.bedrijf||b.naam||'', 'nl');
+      });
+      const data = [header, ...sorted.map(r => [
+        r.bedrijf||'', r.naam||'', r.land||'', TYPE_LABELS[r.type]||'',
+        r.telefoon||'', r.email||'', r.timestamp ? new Date(r.timestamp).toLocaleDateString('nl-NL') : ''
+      ])];
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws['!cols'] = [{wch:28},{wch:20},{wch:18},{wch:16},{wch:18},{wch:28},{wch:14}];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Kaartenkast');
+      const filename = 'kaartenkast-export-' + new Date().toISOString().slice(0,10) + '.xlsx';
+      XLSX.writeFile(wb, filename);
+      showToast('Excel-bestand gedownload · ' + sorted.length + ' kaartjes');
+    }catch(e){
+      console.error('Excel-export mislukt:', e);
+      showToast('Excel-export mislukt: ' + (e && e.message ? e.message : String(e)));
+    }
+    btn.disabled = false; btn.textContent = original;
+  }
+  $('exportXlsxBtn').addEventListener('click', exportXLSX);
 
   function parseCSV(text){
     const rows=[]; let row=[], field='', inQuotes=false;
