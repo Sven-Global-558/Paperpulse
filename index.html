@@ -21,6 +21,7 @@
     --ink:#16212C; --ink-soft:#5B6B7A; --tab-green:#0B5FA8; --tab-green-dark:#084578;
     --gold:#0B5FA8; --rust:#C2540E; --rust-soft:#FBEAE0; --teal:#0B8A72; --teal-soft:#E1F5F0;
     --plum:#6C4FA0; --plum-soft:#EFEAF7; --line:#D7E0EA;
+    --amber:#B4790C; --amber-soft:#FDF0D9;
     --shadow: 0 1px 2px rgba(15,35,60,0.05), 0 10px 22px -12px rgba(15,35,60,0.22);
   }
   *{box-sizing:border-box;}
@@ -104,6 +105,16 @@
   .badge.handelaar{background:var(--rust-soft);color:var(--rust);}
   .badge.eindgebruiker{background:var(--teal-soft);color:var(--teal);}
   .badge.machineleverancier{background:var(--plum-soft);color:var(--plum);}
+  .status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .status-dot.actief{background:var(--teal);}
+  .status-dot.onzeker{background:var(--amber);}
+  .status-dot.gesloten{background:var(--rust);}
+  .status-dot.ongecheckt{background:transparent;border:1.5px solid var(--card-edge);}
+  .status-box{border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;line-height:1.5;}
+  .status-box.actief{background:var(--teal-soft);color:#0B4A3D;}
+  .status-box.onzeker{background:var(--amber-soft);color:#6B4700;}
+  .status-box.gesloten{background:var(--rust-soft);color:#7A3610;}
+  .status-check-btn{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--tab-green);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;margin-bottom:14px;display:inline-block;}
   .empty-browse{text-align:center;color:var(--ink-soft);font-size:14px;padding:40px 20px;}
 
   .modal-bg{display:none;position:fixed;inset:0;background:rgba(10,20,32,0.55);z-index:50;align-items:flex-end;justify-content:center;}
@@ -189,6 +200,14 @@
       <div class="chip" data-filter="eindgebruiker">Eindgebruiker</div>
       <div class="chip" data-filter="machineleverancier">Machineleverancier</div>
     </div>
+    <div class="chips">
+      <div class="chip active" data-statusfilter="alle">Alle statussen</div>
+      <div class="chip" data-statusfilter="actief">🟢 Actief</div>
+      <div class="chip" data-statusfilter="onzeker">🟠 Onzeker</div>
+      <div class="chip" data-statusfilter="gesloten">🔴 Gestopt</div>
+      <div class="chip" data-statusfilter="ongecheckt">⚪ Ongecheckt</div>
+      <button class="chip export-chip" id="bulkCheckBtn">🔍 Ongecheckte bedrijven checken</button>
+    </div>
     <div class="chips" style="margin-top:0;">
       <button class="chip export-chip" id="exportXlsxBtn" style="background:var(--tab-green);color:#fff;">⬇ Excel (.xlsx)</button>
       <button class="chip export-chip" id="exportBtn">⬇ CSV</button>
@@ -219,6 +238,10 @@
       <div class="type-btn" id="mBtnEindgebruiker" data-type="eindgebruiker">Eindgebruiker</div>
       <div class="type-btn" id="mBtnMachineleverancier" data-type="machineleverancier">Machineleverancier</div>
     </div>
+
+    <div id="statusBoxWrap"></div>
+    <button type="button" class="status-check-btn" id="statusCheckBtn">🔍 Bedrijf online checken</button>
+
     <div class="modal-actions">
       <button class="save-btn" id="mSaveBtn">Wijzigingen opslaan</button>
       <button class="del-btn" id="mDelBtn">Verwijderen</button>
@@ -233,6 +256,10 @@
       Vul je Anthropic API-sleutel in voor slimmere herkenning (bedrijf, naam én land worden dan automatisch ingevuld). De sleutel wordt alleen lokaal in deze browser bewaard. Laat leeg om de gratis lokale herkenning te blijven gebruiken.
     </p>
     <label class="field"><span>Anthropic API-sleutel</span><input class="txt" id="apiKeyInput" type="password" placeholder="sk-ant-..." autocomplete="off"></label>
+    <label style="display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:var(--ink-soft); line-height:1.5; margin-bottom:14px; cursor:pointer;">
+      <input type="checkbox" id="autoStatusCheckbox" style="margin-top:2px;">
+      <span>Ook automatisch checken of het bedrijf nog bestaat, direct na elke scan (extra online zoekactie — kost iets meer tijd en een klein bedrag per kaartje). Je kunt dit ook altijd per kaartje handmatig doen.</span>
+    </label>
     <div class="modal-actions">
       <button class="save-btn" id="saveApiKeyBtn">Opslaan</button>
       <button class="del-btn" id="clearApiKeyBtn">Verwijderen</button>
@@ -414,24 +441,29 @@
 
   // ---------- optionele AI-herkenning (eigen Anthropic API-sleutel) ----------
   const API_KEY_STORAGE = 'kaartenkast-anthropic-key';
+  const AUTO_STATUS_STORAGE = 'kaartenkast-auto-status-check';
   function getApiKey(){ return localStorage.getItem(API_KEY_STORAGE) || ''; }
   function setApiKey(k){
     if(k) localStorage.setItem(API_KEY_STORAGE, k);
     else localStorage.removeItem(API_KEY_STORAGE);
     updateAiStatus();
   }
+  function getAutoStatusCheck(){ return localStorage.getItem(AUTO_STATUS_STORAGE) === 'true'; }
+  function setAutoStatusCheck(v){ localStorage.setItem(AUTO_STATUS_STORAGE, v ? 'true' : 'false'); }
   function updateAiStatus(){
     const has = !!getApiKey();
     $('aiStatusText').textContent = has ? '🔑 AI-herkenning actief' : '📖 Lokale herkenning (gratis)';
   }
   $('aiSettingsLink').addEventListener('click', ()=>{
     $('apiKeyInput').value = getApiKey();
+    $('autoStatusCheckbox').checked = getAutoStatusCheck();
     $('aiSettingsModal').classList.add('show');
   });
   $('closeAiSettings').addEventListener('click', ()=> $('aiSettingsModal').classList.remove('show'));
   $('aiSettingsModal').addEventListener('click', e=>{ if(e.target.id==='aiSettingsModal') $('aiSettingsModal').classList.remove('show'); });
   $('saveApiKeyBtn').addEventListener('click', ()=>{
     setApiKey($('apiKeyInput').value.trim());
+    setAutoStatusCheck($('autoStatusCheckbox').checked);
     $('aiSettingsModal').classList.remove('show');
     showToast('Opgeslagen — AI-herkenning is nu actief');
   });
@@ -442,7 +474,111 @@
     showToast('Sleutel verwijderd — terug naar lokale herkenning');
   });
 
-  async function analyzeWithClaude(dataUrl, apiKey){
+  // ---------- bedrijfsstatus online checken (AI + web search) ----------
+  function statusMeta(status){
+    if(status === 'actief') return {label:'Actief', cls:'actief'};
+    if(status === 'onzeker') return {label:'Onzeker / mogelijk verhuisd', cls:'onzeker'};
+    if(status === 'gesloten') return {label:'Mogelijk gestopt', cls:'gesloten'};
+    return {label:'Nog niet gecheckt', cls:'ongecheckt'};
+  }
+
+  async function checkCompanyStatus(bedrijf, land){
+    const apiKey = getApiKey();
+    if(!apiKey) throw new Error('Stel eerst een API-sleutel in bij AI-herkenning');
+    if(!bedrijf) throw new Error('Geen bedrijfsnaam om te checken');
+    const prompt = `Zoek online naar het bedrijf "${bedrijf}"${land ? ' (land: ' + land + ')' : ''}. Ik wil weten of dit bedrijf nu nog bestaat en actief is — bedrijven kunnen verhuisd, overgenomen of gestopt zijn.
+Antwoord aan het eind ALLEEN met een geldig JSON-object, geen markdown eromheen:
+{"status":"actief|onzeker|gesloten","notitie":"","bron":""}
+- "actief": duidelijk nog bestaand en operationeel.
+- "gesloten": duidelijke aanwijzingen dat het gestopt, failliet, of opgeheven is.
+- "onzeker": geen duidelijke recente informatie gevonden, of tegenstrijdige signalen (bijv. overgenomen door ander bedrijf, verhuisd naar ander adres).
+- "notitie": max 20 woorden, de belangrijkste bevinding, in het Nederlands.
+- "bron": domeinnaam van de belangrijkste bron, of leeg als er geen goede bron is.`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 700,
+        messages: [{role:'user', content: prompt}],
+        tools: [{type: 'web_search_20250305', name: 'web_search'}]
+      })
+    });
+    const bodyText = await response.text();
+    if(!response.ok){
+      throw new Error('API-fout ' + response.status + ': ' + bodyText.slice(0,200));
+    }
+    let data;
+    try{ data = JSON.parse(bodyText); }
+    catch(e){ throw new Error('Onverwacht antwoord van API: ' + bodyText.slice(0,200)); }
+    const allText = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+    const cleaned = allText.replace(/```json|```/g,'').trim();
+    const match = cleaned.match(/\{[^{}]*"status"[^{}]*\}/s);
+    try{
+      const parsed = JSON.parse(match ? match[0] : cleaned);
+      return {
+        status: ['actief','onzeker','gesloten'].includes(parsed.status) ? parsed.status : 'onzeker',
+        notitie: parsed.notitie || '',
+        bron: parsed.bron || ''
+      };
+    }catch(e){
+      return {status:'onzeker', notitie: allText.slice(0,140) || 'Kon geen duidelijk antwoord bepalen.', bron:''};
+    }
+  }
+
+  async function runStatusCheckForCard(id){
+    const rec = await getCardData(id);
+    if(!rec) return null;
+    const result = await checkCompanyStatus(rec.bedrijf, rec.land);
+    const updated = {...rec, status: result.status, statusNote: result.notitie, statusBron: result.bron, statusChecked: Date.now()};
+    await saveCardData(id, {
+      id: updated.id, bedrijf: updated.bedrijf, naam: updated.naam, land: updated.land,
+      telefoon: updated.telefoon, email: updated.email, type: updated.type, timestamp: updated.timestamp,
+      status: updated.status, statusNote: updated.statusNote, statusBron: updated.statusBron, statusChecked: updated.statusChecked
+    }, updated.imageDataUrl);
+    const i = cardIndex.findIndex(c=>c.id===id);
+    if(i>-1){
+      cardIndex[i] = {...cardIndex[i], status: updated.status, statusNote: updated.statusNote, statusBron: updated.statusBron, statusChecked: updated.statusChecked};
+    }
+    return updated;
+  }
+
+  let bulkCheckRunning = false;
+  $('bulkCheckBtn').addEventListener('click', async ()=>{
+    if(bulkCheckRunning) return;
+    if(!getApiKey()){ showToast('Stel eerst een API-sleutel in bij AI-herkenning'); return; }
+    const todo = cardIndex.filter(c => !c.status && c.bedrijf);
+    if(todo.length === 0){ showToast('Alles is al gecheckt'); return; }
+    if(!confirm(`${todo.length} bedrijf(ven) checken? Dit gebeurt één voor één en kan een paar minuten duren.`)) return;
+    bulkCheckRunning = true;
+    const btn = $('bulkCheckBtn');
+    const original = btn.textContent;
+    btn.disabled = true;
+    let done = 0, failed = 0;
+    for(const c of todo){
+      btn.textContent = `Bezig… ${done + failed}/${todo.length}`;
+      try{
+        await runStatusCheckForCard(c.id);
+        done++;
+      }catch(e){
+        console.error('Check mislukt voor', c.bedrijf, e);
+        failed++;
+      }
+      renderBrowse();
+    }
+    btn.textContent = original;
+    btn.disabled = false;
+    bulkCheckRunning = false;
+    showToast(`Klaar: ${done} gecheckt${failed ? ', ' + failed + ' mislukt' : ''}`);
+  });
+
+
     const base64 = dataUrl.split(',')[1];
     const prompt = `Visitekaartje. Geef ALLEEN geldig JSON terug, geen markdown, geen uitleg:
 {"bedrijf":"", "naam":"", "land":"", "telefoon":"", "email":""}
@@ -687,6 +823,9 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       updateStat();
       showToast(isUpdate ? 'Bestaand kaartje bijgewerkt' : 'Opgeslagen · ' + cardIndex.length + ' kaartjes totaal');
       resetScanForm();
+      if(getAutoStatusCheck() && getApiKey() && meta.bedrijf){
+        runStatusCheckForCard(id).then(()=>{ renderBrowse(); }).catch(e=> console.error('Automatische statuscheck mislukt:', e));
+      }
     }catch(e){
       console.error('Opslaan mislukt:', e);
       showToast('Opslaan mislukt: ' + (e && e.message ? e.message : String(e)));
@@ -707,11 +846,20 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
   }
 
   // ---------- browse ----------
+  let browseStatusFilter = 'alle';
   document.querySelectorAll('.chip[data-filter]').forEach(chip=>{
     chip.addEventListener('click', ()=>{
       document.querySelectorAll('.chip[data-filter]').forEach(c=>c.classList.remove('active'));
       chip.classList.add('active');
       browseFilter = chip.dataset.filter;
+      renderBrowse();
+    });
+  });
+  document.querySelectorAll('.chip[data-statusfilter]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('.chip[data-statusfilter]').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      browseStatusFilter = chip.dataset.statusfilter;
       renderBrowse();
     });
   });
@@ -721,6 +869,10 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
     const q = $('searchInput').value.trim().toLowerCase();
     let items = cardIndex.filter(c=>{
       if(browseFilter !== 'alle' && c.type !== browseFilter) return false;
+      if(browseStatusFilter !== 'alle'){
+        const s = c.status || 'ongecheckt';
+        if(s !== browseStatusFilter) return false;
+      }
       if(q && !((c.bedrijf+' '+c.naam+' '+c.land).toLowerCase().includes(q))) return false;
       return true;
     });
@@ -746,6 +898,7 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
           : '';
         lastType = c.type;
         return `${subHeader}<div class="card-row" data-id="${c.id}">
+          <div class="status-dot ${statusMeta(c.status).cls}" title="${statusMeta(c.status).label}"></div>
           <div class="who">
             <div class="naam">${escapeHtml(c.bedrijf || c.naam || 'Naamloos kaartje')}</div>
             <div class="bedrijf">${escapeHtml(c.bedrijf && c.naam ? c.naam : '')}</div>
@@ -790,13 +943,14 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       }
     }
     await Promise.all(Array.from({length:Math.min(concurrency,total)}, worker));
-    const header = ['Bedrijf','Naam','Land','Type','Telefoon','E-mail','Datum toegevoegd'];
+    const header = ['Bedrijf','Naam','Land','Type','Telefoon','E-mail','Datum toegevoegd','Status','StatusNotitie'];
     if(includePhotos) header.push('FotoBase64');
     const lines=[header.map(csvEsc).join(',')], tsvLines=[header.map(tsvEsc).join('\t')];
     rows.forEach(r=>{
       const datum = r.timestamp ? new Date(r.timestamp).toLocaleDateString('nl-NL') : '';
       const typeLabel = TYPE_LABELS[r.type] || '';
-      const fields = [r.bedrijf,r.naam,r.land,typeLabel,r.telefoon,r.email,datum];
+      const statusLabel = statusMeta(r.status).label;
+      const fields = [r.bedrijf,r.naam,r.land,typeLabel,r.telefoon,r.email,datum,statusLabel,r.statusNote||''];
       if(includePhotos) fields.push(r.imageDataUrl || '');
       lines.push(fields.map(csvEsc).join(','));
       tsvLines.push(fields.map(tsvEsc).join('\t'));
@@ -820,7 +974,7 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
     const btn = $('exportXlsxBtn'); const original = btn.textContent; btn.disabled = true;
     btn.textContent = 'Bezig…';
     try{
-      const header = ['Bedrijf','Naam','Land','Type','Telefoon','E-mail','Datum toegevoegd'];
+      const header = ['Bedrijf','Naam','Land','Type','Telefoon','E-mail','Datum toegevoegd','Status','StatusNotitie'];
       const sorted = [...cardIndex].sort((a,b)=>{
         const l = (a.land||'').localeCompare(b.land||'', 'nl');
         if(l !== 0) return l;
@@ -828,10 +982,11 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       });
       const data = [header, ...sorted.map(r => [
         r.bedrijf||'', r.naam||'', r.land||'', TYPE_LABELS[r.type]||'',
-        r.telefoon||'', r.email||'', r.timestamp ? new Date(r.timestamp).toLocaleDateString('nl-NL') : ''
+        r.telefoon||'', r.email||'', r.timestamp ? new Date(r.timestamp).toLocaleDateString('nl-NL') : '',
+        statusMeta(r.status).label, r.statusNote||''
       ])];
       const ws = XLSX.utils.aoa_to_sheet(data);
-      ws['!cols'] = [{wch:28},{wch:20},{wch:18},{wch:16},{wch:18},{wch:28},{wch:14}];
+      ws['!cols'] = [{wch:28},{wch:20},{wch:18},{wch:16},{wch:18},{wch:28},{wch:14},{wch:18},{wch:36}];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Kaartenkast');
       const filename = 'kaartenkast-export-' + new Date().toISOString().slice(0,10) + '.xlsx';
@@ -923,8 +1078,48 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
     $('mTel').value = rec.telefoon || '';
     $('mEmail').value = rec.email || '';
     setMType(rec.type);
+    renderStatusBox(rec);
     $('modalBg').classList.add('show');
   }
+
+  function renderStatusBox(rec){
+    const wrap = $('statusBoxWrap');
+    const btn = $('statusCheckBtn');
+    if(!rec.status){
+      wrap.innerHTML = '';
+      btn.textContent = '🔍 Bedrijf online checken';
+      btn.style.display = 'inline-block';
+      return;
+    }
+    const meta = statusMeta(rec.status);
+    const datum = rec.statusChecked ? new Date(rec.statusChecked).toLocaleDateString('nl-NL') : '';
+    wrap.innerHTML = `<div class="status-box ${meta.cls}">
+      <strong>${meta.label}</strong> — gecheckt op ${datum}<br>
+      ${escapeHtml(rec.statusNote || '')}${rec.statusBron ? ' <span style="opacity:0.75;">(' + escapeHtml(rec.statusBron) + ')</span>' : ''}
+    </div>`;
+    btn.textContent = '🔄 Opnieuw checken';
+    btn.style.display = 'inline-block';
+  }
+
+  $('statusCheckBtn').addEventListener('click', async ()=>{
+    if(!currentDetailId) return;
+    const btn = $('statusCheckBtn');
+    const original = btn.textContent;
+    btn.textContent = '🔍 Bezig met zoeken…';
+    btn.disabled = true;
+    try{
+      const updated = await runStatusCheckForCard(currentDetailId);
+      renderStatusBox(updated);
+      renderBrowse();
+      showToast('Status bijgewerkt: ' + statusMeta(updated.status).label);
+    }catch(e){
+      console.error('Statuscheck mislukt:', e);
+      showToast('Check mislukt: ' + (e && e.message ? e.message : String(e)));
+      btn.textContent = original;
+    }
+    btn.disabled = false;
+  });
+
   function setMType(t){
     mType = t;
     $('mBtnHandelaar').className = 'type-btn' + (t==='handelaar' ? ' sel-handelaar' : '');
@@ -945,7 +1140,8 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       id: rec.id,
       bedrijf: $('mBedrijf').value.trim(), naam: $('mNaam').value.trim(),
       land: $('mLand').value.trim() || 'Onbekend', telefoon: $('mTel').value.trim(),
-      email: $('mEmail').value.trim(), type: mType || rec.type, timestamp: rec.timestamp
+      email: $('mEmail').value.trim(), type: mType || rec.type, timestamp: rec.timestamp,
+      status: rec.status, statusNote: rec.statusNote, statusBron: rec.statusBron, statusChecked: rec.statusChecked
     };
     await saveCardData(currentDetailId, meta, rec.imageDataUrl);
     const i = cardIndex.findIndex(c=>c.id===currentDetailId);
