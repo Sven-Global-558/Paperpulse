@@ -579,6 +579,7 @@ Antwoord aan het eind ALLEEN met een geldig JSON-object, geen markdown eromheen:
   });
 
 
+  async function analyzeWithClaude(dataUrl, apiKey){
     const base64 = dataUrl.split(',')[1];
     const prompt = `Visitekaartje. Geef ALLEEN geldig JSON terug, geen markdown, geen uitleg:
 {"bedrijf":"", "naam":"", "land":"", "telefoon":"", "email":""}
