@@ -76,6 +76,8 @@
   .type-btn.sel-handelaar{border-color:var(--rust);background:var(--rust-soft);color:var(--rust);}
   .type-btn.sel-eindgebruiker{border-color:var(--teal);background:var(--teal-soft);color:var(--teal);}
   .type-btn.sel-machineleverancier{border-color:var(--plum);background:var(--plum-soft);color:var(--plum);}
+  .type-btn.sel-bekend{border-color:var(--teal);background:var(--teal-soft);color:var(--teal);}
+  .type-btn.sel-onbekend{border-color:var(--amber);background:var(--amber-soft);color:var(--amber);}
 
   .save-btn{width:100%;padding:14px;background:var(--tab-green);color:#fff;border:none;border-radius:9px;font-weight:700;font-size:15.5px;cursor:pointer;margin-top:4px;box-shadow:0 2px 8px rgba(11,95,168,0.3);}
   .save-btn:disabled{opacity:0.4;cursor:not-allowed;box-shadow:none;}
@@ -115,6 +117,10 @@
   .status-box.onzeker{background:var(--amber-soft);color:#6B4700;}
   .status-box.gesloten{background:var(--rust-soft);color:#7A3610;}
   .status-check-btn{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--tab-green);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;margin-bottom:14px;display:inline-block;}
+  .row-select{width:16px;height:16px;flex-shrink:0;accent-color:var(--tab-green);}
+  .known-tag{font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:700;padding:2px 6px;border-radius:5px;flex-shrink:0;cursor:pointer;border:1px solid var(--card-edge);color:var(--ink-soft);}
+  .known-tag.bekend{background:var(--teal-soft);color:var(--teal);border-color:var(--teal);}
+  .known-tag.onbekend{background:var(--amber-soft);color:var(--amber);border-color:var(--amber);}
   .empty-browse{text-align:center;color:var(--ink-soft);font-size:14px;padding:40px 20px;}
 
   .modal-bg{display:none;position:fixed;inset:0;background:rgba(10,20,32,0.55);z-index:50;align-items:flex-end;justify-content:center;}
@@ -186,6 +192,12 @@
           <div class="type-btn" id="btnMachineleverancier" data-type="machineleverancier">Machineleverancier</div>
         </div>
 
+        <label class="field"><span>Bekendheid <span style="text-transform:none;font-weight:400;">(optioneel — bepaalt later of je 'm wilt laten checken)</span></span></label>
+        <div class="type-toggle">
+          <div class="type-btn" id="btnBekend" data-known="bekend">✓ Bekende klant</div>
+          <div class="type-btn" id="btnOnbekend" data-known="onbekend">? Onbekende klant</div>
+        </div>
+
         <button type="submit" class="save-btn" id="saveBtn" disabled>Opslaan &amp; volgende</button>
         <button type="button" class="cancel-link" id="cancelScan">Annuleren</button>
       </form>
@@ -206,13 +218,24 @@
       <div class="chip" data-statusfilter="onzeker">🟠 Onzeker</div>
       <div class="chip" data-statusfilter="gesloten">🔴 Gestopt</div>
       <div class="chip" data-statusfilter="ongecheckt">⚪ Ongecheckt</div>
-      <button class="chip export-chip" id="bulkCheckBtn">🔍 Ongecheckte bedrijven checken</button>
+    </div>
+    <div class="chips">
+      <div class="chip active" data-knownfilter="alle">Alle klanten</div>
+      <div class="chip" data-knownfilter="bekend">✓ Bekend</div>
+      <div class="chip" data-knownfilter="onbekend">? Onbekend</div>
+      <div class="chip" data-knownfilter="">— Niet ingedeeld</div>
+    </div>
+    <div class="chips" id="selectionBar" style="display:none;background:var(--card);border:1px solid var(--tab-green);border-radius:9px;padding:8px 10px;">
+      <span id="selectionCount" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink);align-self:center;"></span>
+      <button class="chip export-chip" id="checkSelectedBtn" style="background:var(--tab-green);color:#fff;border-color:var(--tab-green);">🔍 Check selectie</button>
+      <button class="chip" id="clearSelectionBtn">Wis selectie</button>
     </div>
     <div class="chips" style="margin-top:0;">
-      <button class="chip export-chip" id="exportXlsxBtn" style="background:var(--tab-green);color:#fff;">⬇ Excel (.xlsx)</button>
+      <button class="chip" id="selectAllVisibleBtn">☑ Selecteer alles zichtbaar</button>
+      <button class="chip export-chip" id="exportXlsxBtn" style="background:var(--tab-green);color:#fff;margin-left:auto;">⬇ Excel (.xlsx)</button>
       <button class="chip export-chip" id="exportBtn">⬇ CSV</button>
       <button class="chip export-chip" id="importBtn">⬆ CSV importeren</button>
-      <label style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);display:flex;align-items:center;gap:5px;margin-left:auto;">
+      <label style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);display:flex;align-items:center;gap:5px;">
         <input type="checkbox" id="exportPhotos"> incl. foto's (CSV)
       </label>
     </div>
@@ -239,6 +262,12 @@
       <div class="type-btn" id="mBtnMachineleverancier" data-type="machineleverancier">Machineleverancier</div>
     </div>
 
+    <label class="field"><span>Bekendheid</span></label>
+    <div class="type-toggle">
+      <div class="type-btn" id="mBtnBekend" data-known="bekend">✓ Bekende klant</div>
+      <div class="type-btn" id="mBtnOnbekend" data-known="onbekend">? Onbekende klant</div>
+    </div>
+
     <div id="statusBoxWrap"></div>
     <button type="button" class="status-check-btn" id="statusCheckBtn">🔍 Bedrijf online checken</button>
 
@@ -256,10 +285,9 @@
       Vul je Anthropic API-sleutel in voor slimmere herkenning (bedrijf, naam én land worden dan automatisch ingevuld). De sleutel wordt alleen lokaal in deze browser bewaard. Laat leeg om de gratis lokale herkenning te blijven gebruiken.
     </p>
     <label class="field"><span>Anthropic API-sleutel</span><input class="txt" id="apiKeyInput" type="password" placeholder="sk-ant-..." autocomplete="off"></label>
-    <label style="display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:var(--ink-soft); line-height:1.5; margin-bottom:14px; cursor:pointer;">
-      <input type="checkbox" id="autoStatusCheckbox" style="margin-top:2px;">
-      <span>Ook automatisch checken of het bedrijf nog bestaat, direct na elke scan (extra online zoekactie — kost iets meer tijd en een klein bedrag per kaartje). Je kunt dit ook altijd per kaartje handmatig doen.</span>
-    </label>
+    <p style="font-size:12px;color:var(--ink-soft);line-height:1.5;margin:0 0 14px;">
+      Of het bedrijf nog bestaat check je bewust, per kaartje of geselecteerd in Overzicht — dat gebeurt nooit automatisch, omdat een online zoekactie duurder is dan gewoon scannen.
+    </p>
     <div class="modal-actions">
       <button class="save-btn" id="saveApiKeyBtn">Opslaan</button>
       <button class="del-btn" id="clearApiKeyBtn">Verwijderen</button>
@@ -277,6 +305,7 @@
   let cardIndex = [];
   let pendingImageDataUrl = null;
   let pendingType = null;
+  let pendingKnown = null;
   let currentDetailId = null;
   let mType = null;
   let browseFilter = 'alle';
@@ -441,29 +470,24 @@
 
   // ---------- optionele AI-herkenning (eigen Anthropic API-sleutel) ----------
   const API_KEY_STORAGE = 'kaartenkast-anthropic-key';
-  const AUTO_STATUS_STORAGE = 'kaartenkast-auto-status-check';
   function getApiKey(){ return localStorage.getItem(API_KEY_STORAGE) || ''; }
   function setApiKey(k){
     if(k) localStorage.setItem(API_KEY_STORAGE, k);
     else localStorage.removeItem(API_KEY_STORAGE);
     updateAiStatus();
   }
-  function getAutoStatusCheck(){ return localStorage.getItem(AUTO_STATUS_STORAGE) === 'true'; }
-  function setAutoStatusCheck(v){ localStorage.setItem(AUTO_STATUS_STORAGE, v ? 'true' : 'false'); }
   function updateAiStatus(){
     const has = !!getApiKey();
     $('aiStatusText').textContent = has ? '🔑 AI-herkenning actief' : '📖 Lokale herkenning (gratis)';
   }
   $('aiSettingsLink').addEventListener('click', ()=>{
     $('apiKeyInput').value = getApiKey();
-    $('autoStatusCheckbox').checked = getAutoStatusCheck();
     $('aiSettingsModal').classList.add('show');
   });
   $('closeAiSettings').addEventListener('click', ()=> $('aiSettingsModal').classList.remove('show'));
   $('aiSettingsModal').addEventListener('click', e=>{ if(e.target.id==='aiSettingsModal') $('aiSettingsModal').classList.remove('show'); });
   $('saveApiKeyBtn').addEventListener('click', ()=>{
     setApiKey($('apiKeyInput').value.trim());
-    setAutoStatusCheck($('autoStatusCheckbox').checked);
     $('aiSettingsModal').classList.remove('show');
     showToast('Opgeslagen — AI-herkenning is nu actief');
   });
@@ -487,6 +511,7 @@
     if(!apiKey) throw new Error('Stel eerst een API-sleutel in bij AI-herkenning');
     if(!bedrijf) throw new Error('Geen bedrijfsnaam om te checken');
     const prompt = `Zoek online naar het bedrijf "${bedrijf}"${land ? ' (land: ' + land + ')' : ''}. Ik wil weten of dit bedrijf nu nog bestaat en actief is — bedrijven kunnen verhuisd, overgenomen of gestopt zijn.
+Gebruik maximaal 1 zoekopdracht (hooguit 2 als de eerste niets bruikbaars oplevert). Kies direct de meest voor de hand liggende zoekterm (bedrijfsnaam + land). Doe geen uitgebreid onderzoek, dit hoeft niet perfect te zijn — een snelle, redelijke inschatting volstaat.
 Antwoord aan het eind ALLEEN met een geldig JSON-object, geen markdown eromheen:
 {"status":"actief|onzeker|gesloten","notitie":"","bron":""}
 - "actief": duidelijk nog bestaand en operationeel.
@@ -505,9 +530,9 @@ Antwoord aan het eind ALLEEN met een geldig JSON-object, geen markdown eromheen:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 700,
+        max_tokens: 500,
         messages: [{role:'user', content: prompt}],
-        tools: [{type: 'web_search_20250305', name: 'web_search'}]
+        tools: [{type: 'web_search_20250305', name: 'web_search', max_uses: 2}]
       })
     });
     const bodyText = await response.text();
@@ -539,7 +564,7 @@ Antwoord aan het eind ALLEEN met een geldig JSON-object, geen markdown eromheen:
     const updated = {...rec, status: result.status, statusNote: result.notitie, statusBron: result.bron, statusChecked: Date.now()};
     await saveCardData(id, {
       id: updated.id, bedrijf: updated.bedrijf, naam: updated.naam, land: updated.land,
-      telefoon: updated.telefoon, email: updated.email, type: updated.type, timestamp: updated.timestamp,
+      telefoon: updated.telefoon, email: updated.email, type: updated.type, timestamp: updated.timestamp, known: updated.known,
       status: updated.status, statusNote: updated.statusNote, statusBron: updated.statusBron, statusChecked: updated.statusChecked
     }, updated.imageDataUrl);
     const i = cardIndex.findIndex(c=>c.id===id);
@@ -549,15 +574,39 @@ Antwoord aan het eind ALLEEN met een geldig JSON-object, geen markdown eromheen:
     return updated;
   }
 
+  // ---------- selectie + gericht checken ----------
+  let selectedIds = new Set();
   let bulkCheckRunning = false;
-  $('bulkCheckBtn').addEventListener('click', async ()=>{
+
+  function updateSelectionBar(){
+    const bar = $('selectionBar');
+    if(selectedIds.size === 0){ bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    $('selectionCount').textContent = `${selectedIds.size} geselecteerd`;
+  }
+
+  $('clearSelectionBtn').addEventListener('click', ()=>{
+    selectedIds.clear();
+    renderBrowse();
+  });
+
+  $('selectAllVisibleBtn').addEventListener('click', ()=>{
+    document.querySelectorAll('.row-select').forEach(cb=>{
+      selectedIds.add(cb.dataset.id);
+      cb.checked = true;
+    });
+    updateSelectionBar();
+  });
+
+  $('checkSelectedBtn').addEventListener('click', async ()=>{
     if(bulkCheckRunning) return;
     if(!getApiKey()){ showToast('Stel eerst een API-sleutel in bij AI-herkenning'); return; }
-    const todo = cardIndex.filter(c => !c.status && c.bedrijf);
-    if(todo.length === 0){ showToast('Alles is al gecheckt'); return; }
-    if(!confirm(`${todo.length} bedrijf(ven) checken? Dit gebeurt één voor één en kan een paar minuten duren.`)) return;
+    const todo = cardIndex.filter(c => selectedIds.has(c.id) && c.bedrijf);
+    if(todo.length === 0){ showToast('Geen geldige selectie'); return; }
+    const estMin = (todo.length * 0.03).toFixed(2), estMax = (todo.length * 0.10).toFixed(2);
+    if(!confirm(`${todo.length} geselecteerde bedrijf(ven) checken? Geschatte kosten: €${estMin}–€${estMax} via je API-sleutel. Dit gebeurt één voor één en kan even duren.`)) return;
     bulkCheckRunning = true;
-    const btn = $('bulkCheckBtn');
+    const btn = $('checkSelectedBtn');
     const original = btn.textContent;
     btn.disabled = true;
     let done = 0, failed = 0;
@@ -571,12 +620,33 @@ Antwoord aan het eind ALLEEN met een geldig JSON-object, geen markdown eromheen:
         failed++;
       }
       renderBrowse();
+      updateSelectionBar();
     }
     btn.textContent = original;
     btn.disabled = false;
     bulkCheckRunning = false;
+    selectedIds.clear();
+    renderBrowse();
     showToast(`Klaar: ${done} gecheckt${failed ? ', ' + failed + ' mislukt' : ''}`);
   });
+
+  async function cycleKnown(id){
+    const rec = cardIndex.find(c=>c.id===id);
+    if(!rec) return;
+    const order = {'': 'onbekend', 'onbekend':'bekend', 'bekend':''};
+    const next = order[rec.known || ''] ?? 'onbekend';
+    const full = await getCardData(id);
+    if(!full) return;
+    const meta = {
+      id: full.id, bedrijf: full.bedrijf, naam: full.naam, land: full.land, telefoon: full.telefoon,
+      email: full.email, type: full.type, timestamp: full.timestamp, known: next,
+      status: full.status, statusNote: full.statusNote, statusBron: full.statusBron, statusChecked: full.statusChecked
+    };
+    await saveCardData(id, meta, full.imageDataUrl);
+    const i = cardIndex.findIndex(c=>c.id===id);
+    if(i>-1) cardIndex[i] = meta;
+    renderBrowse();
+  }
 
 
   async function analyzeWithClaude(dataUrl, apiKey){
@@ -629,12 +699,14 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
     if(!file) return;
     pendingImageDataUrl = await compressForStorage(file);
     pendingType = null;
+    pendingKnown = null;
 
     $('scanEmpty').style.display = 'none';
     $('scanForm').style.display = 'block';
     $('previewImg').src = pendingImageDataUrl;
     ['fBedrijf','fNaam','fLand','fTel','fEmail'].forEach(id => $(id).value = '');
     setType(null);
+    setKnown(null);
     $('rawBox').style.display = 'none';
     $('rawLabel').style.display = 'none';
     $('dupWarning').style.display = 'none';
@@ -735,6 +807,14 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
   $('btnEindgebruiker').addEventListener('click', ()=> setType(pendingType==='eindgebruiker' ? null : 'eindgebruiker'));
   $('btnMachineleverancier').addEventListener('click', ()=> setType(pendingType==='machineleverancier' ? null : 'machineleverancier'));
 
+  function setKnown(k){
+    pendingKnown = k;
+    $('btnBekend').className = 'type-btn' + (k==='bekend' ? ' sel-bekend' : '');
+    $('btnOnbekend').className = 'type-btn' + (k==='onbekend' ? ' sel-onbekend' : '');
+  }
+  $('btnBekend').addEventListener('click', ()=> setKnown(pendingKnown==='bekend' ? null : 'bekend'));
+  $('btnOnbekend').addEventListener('click', ()=> setKnown(pendingKnown==='onbekend' ? null : 'onbekend'));
+
   function updateSaveEnabled(){
     $('saveBtn').disabled = !($('fLand').value.trim() && pendingType);
   }
@@ -807,9 +887,18 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
     if(!land) return;
     const isUpdate = !!updateExistingId;
     const id = updateExistingId || ('c_' + Date.now() + '_' + Math.random().toString(36).slice(2,7));
+    let preserved = {};
+    if(isUpdate){
+      const existing = await getCardData(id);
+      if(existing){
+        preserved = {status: existing.status, statusNote: existing.statusNote, statusBron: existing.statusBron, statusChecked: existing.statusChecked, known: existing.known};
+      }
+    }
     const meta = {
       id, bedrijf: $('fBedrijf').value.trim(), naam: $('fNaam').value.trim(), land,
-      telefoon: $('fTel').value.trim(), email: $('fEmail').value.trim(), type: pendingType, timestamp: Date.now()
+      telefoon: $('fTel').value.trim(), email: $('fEmail').value.trim(), type: pendingType, timestamp: Date.now(),
+      ...preserved,
+      ...(pendingKnown ? {known: pendingKnown} : {})
     };
     $('saveBtn').disabled = true;
     $('saveBtn').textContent = isUpdate ? 'Bijwerken…' : 'Opslaan…';
@@ -824,9 +913,6 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       updateStat();
       showToast(isUpdate ? 'Bestaand kaartje bijgewerkt' : 'Opgeslagen · ' + cardIndex.length + ' kaartjes totaal');
       resetScanForm();
-      if(getAutoStatusCheck() && getApiKey() && meta.bedrijf){
-        runStatusCheckForCard(id).then(()=>{ renderBrowse(); }).catch(e=> console.error('Automatische statuscheck mislukt:', e));
-      }
     }catch(e){
       console.error('Opslaan mislukt:', e);
       showToast('Opslaan mislukt: ' + (e && e.message ? e.message : String(e)));
@@ -848,6 +934,7 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
 
   // ---------- browse ----------
   let browseStatusFilter = 'alle';
+  let browseKnownFilter = 'alle';
   document.querySelectorAll('.chip[data-filter]').forEach(chip=>{
     chip.addEventListener('click', ()=>{
       document.querySelectorAll('.chip[data-filter]').forEach(c=>c.classList.remove('active'));
@@ -864,6 +951,14 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       renderBrowse();
     });
   });
+  document.querySelectorAll('.chip[data-knownfilter]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('.chip[data-knownfilter]').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      browseKnownFilter = chip.dataset.knownfilter;
+      renderBrowse();
+    });
+  });
   $('searchInput').addEventListener('input', renderBrowse);
 
   function renderBrowse(){
@@ -874,6 +969,7 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
         const s = c.status || 'ongecheckt';
         if(s !== browseStatusFilter) return false;
       }
+      if(browseKnownFilter !== 'alle' && (c.known || '') !== browseKnownFilter) return false;
       if(q && !((c.bedrijf+' '+c.naam+' '+c.land).toLowerCase().includes(q))) return false;
       return true;
     });
@@ -898,12 +994,16 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
           ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-soft);margin:10px 0 4px 2px;">${TYPE_LABELS[c.type] || 'Eindgebruiker'}</div>`
           : '';
         lastType = c.type;
+        const knownCls = c.known === 'bekend' ? 'bekend' : (c.known === 'onbekend' ? 'onbekend' : '');
+        const knownLabel = c.known === 'bekend' ? '✓' : (c.known === 'onbekend' ? '?' : '—');
         return `${subHeader}<div class="card-row" data-id="${c.id}">
+          <input type="checkbox" class="row-select" data-id="${c.id}" ${selectedIds.has(c.id) ? 'checked' : ''}>
           <div class="status-dot ${statusMeta(c.status).cls}" title="${statusMeta(c.status).label}"></div>
           <div class="who">
             <div class="naam">${escapeHtml(c.bedrijf || c.naam || 'Naamloos kaartje')}</div>
             <div class="bedrijf">${escapeHtml(c.bedrijf && c.naam ? c.naam : '')}</div>
           </div>
+          <div class="known-tag ${knownCls}" data-id="${c.id}" title="Tik om bekendheid te wijzigen">${knownLabel}</div>
           <div class="badge ${c.type}">${TYPE_LABELS[c.type] || 'Eindgebruiker'}</div>
         </div>`;
       }).join('');
@@ -921,8 +1021,25 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       });
     });
     document.querySelectorAll('.card-row').forEach(row=>{
-      row.addEventListener('click', ()=> openDetail(row.dataset.id));
+      row.addEventListener('click', (e)=>{
+        if(e.target.classList.contains('row-select') || e.target.classList.contains('known-tag')) return;
+        openDetail(row.dataset.id);
+      });
     });
+    document.querySelectorAll('.row-select').forEach(cb=>{
+      cb.addEventListener('click', e=>{
+        e.stopPropagation();
+        if(cb.checked) selectedIds.add(cb.dataset.id); else selectedIds.delete(cb.dataset.id);
+        updateSelectionBar();
+      });
+    });
+    document.querySelectorAll('.known-tag').forEach(tag=>{
+      tag.addEventListener('click', e=>{
+        e.stopPropagation();
+        cycleKnown(tag.dataset.id);
+      });
+    });
+    updateSelectionBar();
   }
 
   // ---------- csv export/import (handig als extra back-up) ----------
@@ -944,14 +1061,15 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       }
     }
     await Promise.all(Array.from({length:Math.min(concurrency,total)}, worker));
-    const header = ['Bedrijf','Naam','Land','Type','Telefoon','E-mail','Datum toegevoegd','Status','StatusNotitie'];
+    const header = ['Bedrijf','Naam','Land','Type','Bekendheid','Telefoon','E-mail','Datum toegevoegd','Status','StatusNotitie'];
     if(includePhotos) header.push('FotoBase64');
     const lines=[header.map(csvEsc).join(',')], tsvLines=[header.map(tsvEsc).join('\t')];
     rows.forEach(r=>{
       const datum = r.timestamp ? new Date(r.timestamp).toLocaleDateString('nl-NL') : '';
       const typeLabel = TYPE_LABELS[r.type] || '';
       const statusLabel = statusMeta(r.status).label;
-      const fields = [r.bedrijf,r.naam,r.land,typeLabel,r.telefoon,r.email,datum,statusLabel,r.statusNote||''];
+      const knownLabel = r.known === 'bekend' ? 'Bekend' : (r.known === 'onbekend' ? 'Onbekend' : '');
+      const fields = [r.bedrijf,r.naam,r.land,typeLabel,knownLabel,r.telefoon,r.email,datum,statusLabel,r.statusNote||''];
       if(includePhotos) fields.push(r.imageDataUrl || '');
       lines.push(fields.map(csvEsc).join(','));
       tsvLines.push(fields.map(tsvEsc).join('\t'));
@@ -975,7 +1093,7 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
     const btn = $('exportXlsxBtn'); const original = btn.textContent; btn.disabled = true;
     btn.textContent = 'Bezig…';
     try{
-      const header = ['Bedrijf','Naam','Land','Type','Telefoon','E-mail','Datum toegevoegd','Status','StatusNotitie'];
+      const header = ['Bedrijf','Naam','Land','Type','Bekendheid','Telefoon','E-mail','Datum toegevoegd','Status','StatusNotitie'];
       const sorted = [...cardIndex].sort((a,b)=>{
         const l = (a.land||'').localeCompare(b.land||'', 'nl');
         if(l !== 0) return l;
@@ -983,11 +1101,12 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       });
       const data = [header, ...sorted.map(r => [
         r.bedrijf||'', r.naam||'', r.land||'', TYPE_LABELS[r.type]||'',
+        r.known === 'bekend' ? 'Bekend' : (r.known === 'onbekend' ? 'Onbekend' : ''),
         r.telefoon||'', r.email||'', r.timestamp ? new Date(r.timestamp).toLocaleDateString('nl-NL') : '',
         statusMeta(r.status).label, r.statusNote||''
       ])];
       const ws = XLSX.utils.aoa_to_sheet(data);
-      ws['!cols'] = [{wch:28},{wch:20},{wch:18},{wch:16},{wch:18},{wch:28},{wch:14},{wch:18},{wch:36}];
+      ws['!cols'] = [{wch:28},{wch:20},{wch:18},{wch:16},{wch:14},{wch:18},{wch:28},{wch:14},{wch:18},{wch:36}];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Kaartenkast');
       const filename = 'kaartenkast-export-' + new Date().toISOString().slice(0,10) + '.xlsx';
@@ -1037,7 +1156,7 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       if(rows.length < 2){ showToast('Geen gegevens gevonden'); return; }
       const header = rows[0].map(h => h.trim().toLowerCase());
       const idx = {bedrijf:header.indexOf('bedrijf'), naam:header.indexOf('naam'), land:header.indexOf('land'),
-        type:header.indexOf('type'), tel:header.indexOf('telefoon'), email:header.indexOf('e-mail'), foto:header.indexOf('fotobase64')};
+        type:header.indexOf('type'), known:header.indexOf('bekendheid'), tel:header.indexOf('telefoon'), email:header.indexOf('e-mail'), foto:header.indexOf('fotobase64')};
       let added=0, skipped=0;
       for(let r=1;r<rows.length;r++){
         const row = rows[r];
@@ -1047,6 +1166,8 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
         const land = idx.land>-1 ? (row[idx.land]||'').trim() : 'Onbekend';
         const typeRaw = idx.type>-1 ? (row[idx.type]||'').trim().toLowerCase() : '';
         const type = (typeRaw==='handelaar'||typeRaw==='machineleverancier') ? typeRaw : 'eindgebruiker';
+        const knownRaw = idx.known>-1 ? (row[idx.known]||'').trim().toLowerCase() : '';
+        const known = knownRaw==='bekend' ? 'bekend' : (knownRaw==='onbekend' ? 'onbekend' : '');
         const telefoon = idx.tel>-1 ? (row[idx.tel]||'').trim() : '';
         const email = idx.email>-1 ? (row[idx.email]||'').trim() : '';
         const foto = idx.foto>-1 ? (row[idx.foto]||'').trim() : '';
@@ -1054,8 +1175,8 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
         if(isDup && (bedrijf||naam)){ skipped++; continue; }
         const id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
         const timestamp = Date.now();
-        await saveCardData(id, {id,bedrijf,naam,land,telefoon,email,type,timestamp}, foto);
-        cardIndex.push({id,bedrijf,naam,land,telefoon,email,type,timestamp});
+        await saveCardData(id, {id,bedrijf,naam,land,telefoon,email,type,known,timestamp}, foto);
+        cardIndex.push({id,bedrijf,naam,land,telefoon,email,type,known,timestamp});
         added++;
       }
       updateStat(); renderBrowse();
@@ -1079,6 +1200,7 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
     $('mTel').value = rec.telefoon || '';
     $('mEmail').value = rec.email || '';
     setMType(rec.type);
+    setMKnown(rec.known || null);
     renderStatusBox(rec);
     $('modalBg').classList.add('show');
   }
@@ -1130,6 +1252,16 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
   $('mBtnHandelaar').addEventListener('click', ()=> setMType('handelaar'));
   $('mBtnEindgebruiker').addEventListener('click', ()=> setMType('eindgebruiker'));
   $('mBtnMachineleverancier').addEventListener('click', ()=> setMType('machineleverancier'));
+
+  let mKnown = null;
+  function setMKnown(k){
+    mKnown = k;
+    $('mBtnBekend').className = 'type-btn' + (k==='bekend' ? ' sel-bekend' : '');
+    $('mBtnOnbekend').className = 'type-btn' + (k==='onbekend' ? ' sel-onbekend' : '');
+  }
+  $('mBtnBekend').addEventListener('click', ()=> setMKnown(mKnown==='bekend' ? null : 'bekend'));
+  $('mBtnOnbekend').addEventListener('click', ()=> setMKnown(mKnown==='onbekend' ? null : 'onbekend'));
+
   $('closeModal').addEventListener('click', ()=> $('modalBg').classList.remove('show'));
   $('modalBg').addEventListener('click', (e)=>{ if(e.target.id==='modalBg') $('modalBg').classList.remove('show'); });
 
@@ -1142,6 +1274,7 @@ Leeg veld = "". "land": volledige Nederlandse naam, afgeleid uit adres/landcode/
       bedrijf: $('mBedrijf').value.trim(), naam: $('mNaam').value.trim(),
       land: $('mLand').value.trim() || 'Onbekend', telefoon: $('mTel').value.trim(),
       email: $('mEmail').value.trim(), type: mType || rec.type, timestamp: rec.timestamp,
+      known: mKnown || '',
       status: rec.status, statusNote: rec.statusNote, statusBron: rec.statusBron, statusChecked: rec.statusChecked
     };
     await saveCardData(currentDetailId, meta, rec.imageDataUrl);
